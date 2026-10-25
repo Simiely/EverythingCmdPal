@@ -13,8 +13,16 @@ PowerToys Command Palette 的 Everything 搜索扩展（基于官方 SDK3 / Ever
 
 ## 安装 / 更新
 
-- 开发机：双击 `tools\update.cmd`（构建 → 关 CmdPal → 卸载旧包 → 打包签名 → 安装 → 重启）
-- 首次安装需要信任开发证书：右键管理员运行 `tools\trust-cert-admin.cmd`
+**新电脑（推荐）**：`git clone` 或 Download ZIP 解压 → 双击 `tools\update.cmd`
+
+脚本会自动完成：安装 .NET SDK 10（仅用户目录）→ 生成并信任开发证书（一次 UAC）→
+构建 → 打包签名 → 安装 → 启动。打包工具（makeappx/signtool）来自 NuGet 的
+`Microsoft.Windows.SDK.BuildTools` 包，无需手动下载。
+
+**已有机器**：改完代码后同样双击 `tools\update.cmd` 即可（安全流程：关 CmdPal →
+卸载旧包 → 安装 → 重启，不会出现重复条目）。
+
+**前提**：Windows 10/11 x64；本机需安装并运行 Everything 1.5+（扩展通过 IPC 连接）。
 
 ## 开发
 

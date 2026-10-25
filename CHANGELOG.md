@@ -2,6 +2,12 @@
 
 所有版本的变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.3.0] - 2026-10-26
+
+- 工具链：`tools/update.ps1` + `update.cmd` 支持全新机器一键安装/更新
+  （自动装 .NET SDK 10、生成并信任开发证书、从 NuGet 解析 makeappx/signtool）
+- 构建：`Microsoft.Windows.SDK.BuildTools` 改为 NuGet 包引用（仓库不再携带/手工解压工具）
+
 ## [1.2.2] - 2026-10-26
 
 - 新增：「在 Everything 中打开」当前搜索（`-instance` + `-search`，exe 自动定位）

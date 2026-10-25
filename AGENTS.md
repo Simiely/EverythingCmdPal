@@ -7,7 +7,7 @@
 
 - .NET SDK **10.0.100**（装在 `%LOCALAPPDATA%\Microsoft\dotnet`；无 Visual Studio、无 Windows SDK）
 - `net10.0-windows10.0.26100.0` + `WindowsSdkPackageVersion 10.0.26100.68-preview`
-- `Microsoft.CommandPalette.Extensions` **0.11.260520004**（Toolkit 同包）、`Shmuelie.WinRTServer` 2.1.1、`Microsoft.Windows.CsWinRT` 2.2.0
+- `Microsoft.CommandPalette.Extensions` **0.11.260520004**（Toolkit 同包）、`Shmuelie.WinRTServer` 2.1.1、`Microsoft.Windows.CsWinRT` 2.2.0、`Microsoft.Windows.SDK.BuildTools` 10.0.26100.4188（NuGet 自动，提供 makeappx/signtool）
 - 宿主：PowerToys **0.100.2**（CmdPal 0.11.11762）
 - Everything **1.5.0.1408a**，实例名 `1.5a`（`allow_ipc_pipe=1`），SDK 为 `src/EverythingCmdPal/native/Everything3.dll`
 
@@ -28,7 +28,7 @@
 
 ## 常用命令
 
-- 一键更新：双击 `tools\update.cmd`
+- 一键安装/更新（新机器也能跑：自动装 SDK、证书走一次 UAC）：双击 `tools\update.cmd`
 - 分页自测：`dotnet run --project tools\SelfTest`
 - SDK 连通性：`dotnet run --project tools\QueryTest -- "*.sln"`
 
