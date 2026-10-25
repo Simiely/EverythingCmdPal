@@ -1,0 +1,14 @@
+# 构建产物
+bin/
+obj/
+
+# 打包产物与布局
+package/
+
+# 下载的打包工具（makeappx/signtool 等，可由 NuGet 包重新解压）
+tools/buildtools/
+tools/sdkbuildtools/
+
+# IDE
+.vs/
+*.user
