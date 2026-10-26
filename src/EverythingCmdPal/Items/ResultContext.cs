@@ -1,4 +1,5 @@
 using System;
+using EverythingCmdPal.Services;
 using Microsoft.CommandPalette.Extensions;
 
 namespace EverythingCmdPal.Items;
@@ -24,4 +25,10 @@ internal sealed class ResultContext
 
     /// <summary>Everything 1.5 instance name, or empty for the default instance.</summary>
     public required string InstanceName { get; init; }
+
+    /// <summary>
+    /// Builds the "浏览文件夹" context item for folder results (null for files /
+    /// when the page does not support browsing).
+    /// </summary>
+    public Func<SearchHit, IContextItem?>? FolderBrowseFactory { get; init; }
 }

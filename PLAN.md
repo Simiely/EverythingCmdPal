@@ -270,7 +270,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
 | 纯文本/代码/日志/json/xml/csv | `PlainTextContent { WrapWords = true }` | 只读前 64KB；二进制嗅探后跳过 |
 | Markdown | `MarkdownContent` | 渲染标题/列表/链接 |
 | PDF / Office / 视频 / 压缩包 | `HeroImage`（shell 缩略图）+ 元数据 | 要看内容按 `Ctrl+Space` 走 Peek |
-| 文件夹 | `HeroImage`（文件夹图标）+ 子项数量 | 可以后续加「浏览」页 |
+| 文件夹 | `HeroImage`（文件夹图标）+ 子项数量 | **已有「浏览」页（1.3.4）**：`Ctrl+K` → 浏览文件夹，`parent:"路径"` 只列直接子项 |
 
 ```csharp
 internal sealed partial class PreviewService

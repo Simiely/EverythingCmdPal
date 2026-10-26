@@ -15,8 +15,10 @@ namespace EverythingCmdPal.Pages;
 /// UI adapter for the search: owns the item list shown to the host and schedules
 /// queries on a background consumer. Pagination state lives in <see cref="SearchSession"/>;
 /// details metadata lives in <see cref="ResultMetadata"/>.
+/// Subclasses may translate search-box text into a different Everything query
+/// (e.g. BrowsePage turns it into a parent: filter).
 /// </summary>
-internal sealed partial class ResultsPage : DynamicListPage, IDisposable
+internal partial class ResultsPage : DynamicListPage, IDisposable
 {
     private readonly object _itemsLock = new();
     private readonly List<IListItem> _items = [];
@@ -92,6 +94,10 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
             QueryProvider = () => _session.Query,
             EverythingExe = EverythingLocator.FindExe(),
             InstanceName = settings.InstanceName,
+            FolderBrowseFactory = hit => new CommandContextItem(new BrowsePage(_settings, hit.FullPath))
+            {
+                Title = "浏览文件夹",
+            },
         };
 
         HostLog.Info($"page created (pageSize={_pageSize}, details={ShowDetails}, previewWidth={_previewWidth})");
@@ -104,10 +110,19 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
         _deferred = !string.IsNullOrWhiteSpace(_initialQuery);
     }
 
+    /// <summary>Hook for subclasses: translate search-box text into the actual query.</summary>
+    protected virtual string ToEverythingQuery(string searchText) => searchText;
+
+    /// <summary>Empty-state texts; subclasses may override (e.g. browse page).</summary>
+    protected virtual string IdleTitle => "输入关键词开始搜索";
+    protected virtual string IdleSubtitle => "需要 Everything 1.5 正在运行";
+    protected virtual string NoResultTitle => "没有找到结果";
+    protected virtual string NoResultSubtitle => "换个关键词，或用 Everything 语法（ext:psd dm:thisweek）";
+
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
         EnsureConsumer();
-        _queries.Writer.TryWrite(new SearchRequest(newSearch ?? string.Empty, _sort));
+        _queries.Writer.TryWrite(new SearchRequest(ToEverythingQuery(newSearch ?? string.Empty), _sort));
     }
 
     public override IListItem[] GetItems()
@@ -115,9 +130,10 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
         if (_deferred)
         {
             _deferred = false;
-            HostLog.Info($"running deferred query '{_initialQuery}'");
+            var transformed = ToEverythingQuery(_initialQuery);
+            HostLog.Info($"running deferred query '{transformed}'");
             EnsureConsumer();
-            _queries.Writer.TryWrite(new SearchRequest(_initialQuery, _sort));
+            _queries.Writer.TryWrite(new SearchRequest(transformed, _sort));
         }
 
         lock (_itemsLock)
@@ -209,7 +225,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
 
                     if (string.IsNullOrWhiteSpace(request.Query))
                     {
-                        SetEmpty("输入关键词开始搜索", "需要 Everything 1.5 正在运行");
+                        SetEmpty(IdleTitle, IdleSubtitle);
                         HasMoreItems = false;
                         continue;
                     }
@@ -237,7 +253,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
                         }
                         else if (_session.Total == 0)
                         {
-                            SetEmpty("没有找到结果", "换个关键词，或用 Everything 语法（ext:psd dm:thisweek）");
+                            SetEmpty(NoResultTitle, NoResultSubtitle);
                         }
                         else
                         {

@@ -2,6 +2,16 @@
 
 所有版本的变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.3.4] - 2026-10-26
+
+- 新增：文件夹「浏览」页。文件夹结果的 `Ctrl+K` 菜单多一项「浏览文件夹」，
+  列出该文件夹的直接子项（Everything `parent:"路径"` 官方语法），搜索框变成
+  在当前文件夹内筛选，排序/分页/预览/连接诊断全部沿用
+- 重构：`ResultsPage` 去密封并加 `ToEverythingQuery` 钩子与可覆盖空态文案，
+  浏览页以子类实现（12 行核心逻辑），`ResultContext` 加 `FolderBrowseFactory`
+- SelfTest 新增 3 条浏览查询构造断言（共 27 项全过）；
+  QueryTest 实测 `parent:` 经 SDK3 返回直接子项 13/13
+
 ## [1.3.3.3] - 2026-10-26
 
 - 修复：连不上 Everything 时一律落到「没有找到结果」，看不出原因。现在区分两种失败——

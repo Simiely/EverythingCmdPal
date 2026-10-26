@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EverythingCmdPal.Pages;
 using EverythingCmdPal.Services;
 
 namespace SelfTest;
@@ -85,6 +86,14 @@ internal static class Program
         {
             try { Directory.Delete(cacheDir, true); } catch { }
         }
+
+        // 浏览页查询构造（1.3.4）：parent: 限直接子项，筛选词拼在后面。
+        Check("browse: no filter -> parent only",
+            BrowsePage.BuildBrowseQuery(@"C:\dir\", null) == "parent:\"C:\\dir\"");
+        Check("browse: trailing slash normalized",
+            BrowsePage.BuildBrowseQuery(@"C:\dir\\", "") == "parent:\"C:\\dir\"");
+        Check("browse: filter appended",
+            BrowsePage.BuildBrowseQuery(@"C:\dir", "  readme ") == "parent:\"C:\\dir\" readme");
 
         Console.WriteLine(_failures == 0 ? "ALL PASS" : $"{_failures} FAILURES");
         return _failures == 0 ? 0 : 1;

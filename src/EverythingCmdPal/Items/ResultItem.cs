@@ -45,6 +45,15 @@ internal sealed class ResultItem : ListItem
             more.Add(ctx.ToggleItem);
         }
 
+        if (hit.IsFolder)
+        {
+            var browse = ctx.FolderBrowseFactory?.Invoke(hit);
+            if (browse is not null)
+            {
+                more.Add(browse);
+            }
+        }
+
         if (!string.IsNullOrEmpty(ctx.EverythingExe))
         {
             more.Add(new CommandContextItem(new OpenInEverythingCommand(ctx.EverythingExe, ctx.InstanceName, ctx.QueryProvider)));
