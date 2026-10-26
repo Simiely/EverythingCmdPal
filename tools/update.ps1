@@ -15,7 +15,7 @@ $dotnetDir = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet'
 $dotnet = Join-Path $dotnetDir 'dotnet.exe'
 if (-not (Test-Path $dotnet)) {
     $zip = Join-Path $env:TEMP 'dotnet-sdk-10.0.100-win-x64.zip'
-    $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/dotnet-sdk-win-x64-10.0.100.zip'
+    $url = 'https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.100/dotnet-sdk-10.0.100-win-x64.zip'
     Write-Host 'downloading .NET SDK 10.0.100 (~290MB)...'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing

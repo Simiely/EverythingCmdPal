@@ -37,6 +37,17 @@ internal static class Everything3Native
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool Everything3_SetSearchViewportCount(IntPtr searchState, nuint count);
 
+    /// <summary>
+    /// 服务端排序：替换当前搜索状态上的排序规则（Everything3.h SDK 3.0.0.9, line 988）。
+    /// 必须在 Everything3_Search 之前调用，且排序作用于整个结果集，分页 offset 保持不变。
+    /// </summary>
+    [DllImport(Dll, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool Everything3_SetSearchSort(
+        IntPtr searchState,
+        uint propertyId,
+        [MarshalAs(UnmanagedType.Bool)] bool ascending);
+
     [DllImport(Dll, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool Everything3_AddSearchPropertyRequest(IntPtr searchState, uint propertyId);
@@ -73,4 +84,17 @@ internal static class Everything3Native
     [DllImport(Dll, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool Everything3_IsFolderResult(IntPtr resultList, nuint resultIndex);
+}
+
+/// <summary>
+/// Everything3.h 中的属性 ID（SDK 3.0.0.9, line 125-138）。本扩展只用到四个可快速排序的
+/// 属性：实测 Everything3_IsPropertyFastSort 对 NAME/PATH/SIZE/DATE_MODIFIED 返回 TRUE，
+/// 对 DATE_CREATED 返回 FALSE，所以不暴露后者。
+/// </summary>
+internal static class Everything3PropertyIds
+{
+    internal const uint Name = 0;
+    internal const uint Path = 1;
+    internal const uint Size = 2;
+    internal const uint DateModified = 5;
 }

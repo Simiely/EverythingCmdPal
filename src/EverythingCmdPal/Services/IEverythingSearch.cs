@@ -8,5 +8,5 @@ namespace EverythingCmdPal.Services;
 /// </summary>
 internal interface IEverythingSearch
 {
-    IReadOnlyList<SearchHit> Search(string query, int offset, int count, out int total);
+    IReadOnlyList<SearchHit> Search(string query, int offset, int count, SortOrder.SortSpec sort, out int total);
 }

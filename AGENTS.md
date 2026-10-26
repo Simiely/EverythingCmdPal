@@ -18,6 +18,9 @@
 - 安装：签名证书必须进 **本机** `LocalMachine\Root`（CurrentUser 不够）；**先卸载旧包再安装**，否则 CmdPal 出现重复条目
 - 预览：宿主先全尺寸解码再布局 → 大图先降采样成临时文件再引用；URL 加 `--x-cmdpal-fit=fit` 才跟随栏宽
 - `ChoiceSetSetting` 默认值 = **第一个选项**，默认项必须排在第一位
+- `DynamicListPage.SearchText` 的 setter 会**同步回调 `UpdateSearchText`**（`DynamicListPage.cs` L9-18）→ 在后台回调里写它会自激成环（界面持续闪）；搜索框文本归宿主管，GoBack 返回时无法保留
+- `ShowDetails` 只在页面构造时被宿主读取，运行期改值 + `OnPropertyChanged` + `RaiseItemsChanged` 均不重排 → 详情栏开关只能换页
+- 一对页面来回切换时只允许一个方向 push，回程用 `CommandResult.GoBack()`，否则返回栈越切越深
 
 ## 约定
 

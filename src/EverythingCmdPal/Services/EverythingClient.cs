@@ -41,18 +41,18 @@ internal sealed class EverythingClient : IEverythingSearch
         return _client != IntPtr.Zero;
     }
 
-    public IReadOnlyList<SearchHit> Search(string query, int offset, int count, out int total)
+    public IReadOnlyList<SearchHit> Search(string query, int offset, int count, SortOrder.SortSpec sort, out int total)
     {
         total = 0;
 
         lock (_gate)
         {
             if (!TryConnect()) return Array.Empty<SearchHit>();
-            return SearchCore(query, offset, count, out total) ?? (IReadOnlyList<SearchHit>)Array.Empty<SearchHit>();
+            return SearchCore(query, offset, count, sort, out total) ?? (IReadOnlyList<SearchHit>)Array.Empty<SearchHit>();
         }
     }
 
-    private unsafe List<SearchHit>? SearchCore(string query, int offset, int count, out int total)
+    private unsafe List<SearchHit>? SearchCore(string query, int offset, int count, SortOrder.SortSpec sort, out int total)
     {
         total = 0;
 
@@ -65,6 +65,9 @@ internal sealed class EverythingClient : IEverythingSearch
             Everything3Native.Everything3_SetSearchTextW(state, query);
             Everything3Native.Everything3_SetSearchViewportOffset(state, (nuint)offset);
             Everything3Native.Everything3_SetSearchViewportCount(state, (nuint)count);
+
+            // 排序必须落在 SearchState 上（服务端排序），客户端排序会让分页顺序错位。
+            Everything3Native.Everything3_SetSearchSort(state, sort.PropertyId, sort.Ascending);
 
             // IMPORTANT: do not call Everything3_AddSearchPropertyRequest here.
             // As soon as a property request is added, Everything3_GetResultFullPathNameW

@@ -21,7 +21,10 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
     private readonly object _itemsLock = new();
     private readonly List<IListItem> _items = [];
 
-    private readonly Channel<string> _queries = Channel.CreateBounded<string>(
+    /// <summary>一次搜索请求：查询词 + 排序。排序切换也走这条队列，保证搜索串行。</summary>
+    private readonly record struct SearchRequest(string Query, SortOrder.SortSpec Sort);
+
+    private readonly Channel<SearchRequest> _queries = Channel.CreateBounded<SearchRequest>(
         new BoundedChannelOptions(1)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
@@ -42,14 +45,16 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
     private bool _deferred;
     private int _loadingMore;
     private string _initialQuery = string.Empty;
+    private ResultsPage? _returnPage;
     private ResultsPage? _togglePage;
     private readonly ResultContext _context;
+    private SortOrder.SortSpec _sort;
 
-    public ResultsPage(SettingsManager settings, string? initialQuery = null, bool? showDetails = null)
+    public ResultsPage(SettingsManager settings, string? initialQuery = null, bool? showDetails = null, ResultsPage? returnPage = null)
     {
         Id = "com.everything.cmdpal.results";
         Title = "Everything";
-        Name = showDetails == false ? "纯列表" : "搜索";
+        Name = showDetails == false ? "隐藏详情" : "详细信息";
         Icon = Icons.App;
         PlaceholderText = "输入文件名、通配符或 Everything 语法（ext:psd dm:thisweek）";
         ShowDetails = showDetails ?? settings.ShowDetails;
@@ -58,8 +63,13 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
         _pageSize = settings.PageSize;
         _previewWidth = settings.PreviewWidth;
         _detailsSize = settings.DetailsSize;
+        _sort = settings.Sort;
+        _returnPage = returnPage;
         _client = new EverythingClient(settings.InstanceName);
         _session = new SearchSession(_client, _pageSize);
+
+        // 顶部过滤条：名称 / 路径 / 大小 / 修改时间 × 升降序，切换即重搜并写回设置。
+        Filters = new SortFilters(_sort, OnSortChanged);
 
         _empty = new CommandItem(new NoOpCommand())
         {
@@ -97,7 +107,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
     public override void UpdateSearchText(string oldSearch, string newSearch)
     {
         EnsureConsumer();
-        _queries.Writer.TryWrite(newSearch ?? string.Empty);
+        _queries.Writer.TryWrite(new SearchRequest(newSearch ?? string.Empty, _sort));
     }
 
     public override IListItem[] GetItems()
@@ -107,7 +117,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
             _deferred = false;
             HostLog.Info($"running deferred query '{_initialQuery}'");
             EnsureConsumer();
-            _queries.Writer.TryWrite(_initialQuery);
+            _queries.Writer.TryWrite(new SearchRequest(_initialQuery, _sort));
         }
 
         lock (_itemsLock)
@@ -159,6 +169,23 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
         }
     }
 
+    /// <summary>
+    /// 过滤条切换排序：写回设置，并对当前查询从 offset 0 重搜（换排序必须重置分页）。
+    /// </summary>
+    private void OnSortChanged(SortOrder.SortSpec sort)
+    {
+        if (sort == _sort) return;
+
+        _sort = sort;
+        _settings.SetSort(sort.Id);
+
+        var query = _session.Query;
+        if (string.IsNullOrWhiteSpace(query)) return;
+
+        EnsureConsumer();
+        _queries.Writer.TryWrite(new SearchRequest(query, sort));
+    }
+
     private void EnsureConsumer()
     {
         _consumer ??= Task.Run(ConsumeAsync);
@@ -168,7 +195,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
     {
         try
         {
-            await foreach (var query in _queries.Reader.ReadAllAsync(_cts.Token))
+            await foreach (var request in _queries.Reader.ReadAllAsync(_cts.Token))
             {
                 IsLoading = true;
                 try
@@ -180,15 +207,15 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
 
                     RaiseItemsChanged(0);
 
-                    if (string.IsNullOrWhiteSpace(query))
+                    if (string.IsNullOrWhiteSpace(request.Query))
                     {
                         SetEmpty("输入关键词开始搜索", "需要 Everything 1.5 正在运行");
                         HasMoreItems = false;
                         continue;
                     }
 
-                    var hits = _session.Start(query);
-                    _togglePage?.SetPendingQuery(query);
+                    var hits = _session.Start(request.Query, request.Sort);
+                    _togglePage?.SetPendingQuery(request.Query);
                     lock (_itemsLock)
                     {
                         foreach (var hit in hits)
@@ -208,7 +235,7 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    HostLog.Error($"search '{query}' failed: {ex}");
+                    HostLog.Error($"search '{request.Query}' failed: {ex}");
                     SetEmpty("搜索失败", ex.Message);
                     HasMoreItems = false;
                 }
@@ -242,18 +269,19 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
     /// </summary>
     private IContextItem? GetToggleItem()
     {
-        if (!ShowDetails)
+        // 纯列表页：弹回上一层详情页（GoBack），不再压新页面，避免返回栈越切越深。
+        if (_returnPage is not null)
         {
-            // Host adds its own "Show details" action when the pane is off.
-            return null;
+            return new CommandContextItem(new GoBackCommand());
         }
 
-        _togglePage ??= new ResultsPage(_settings, null, showDetails: !ShowDetails);
+        // 详情页：打开无详情版本，标题显示「隐藏详细信息」。
+        _togglePage ??= new ResultsPage(_settings, null, showDetails: !ShowDetails, returnPage: this);
         _togglePage.SetPendingQuery(_session.Query);
 
         return new CommandContextItem(_togglePage)
         {
-            Title = "隐藏预览",
+            Title = "隐藏详细信息",
         };
     }
 

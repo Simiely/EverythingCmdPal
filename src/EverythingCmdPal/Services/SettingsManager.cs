@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
 namespace EverythingCmdPal.Services;
@@ -55,6 +56,13 @@ internal sealed class SettingsManager : JsonSettingsManager
             new ChoiceSetSetting.Choice("小", "Small"),
         ]);
 
+    // 默认值必须排在第一位（ChoiceSetSetting 以第一个选项为默认，见 AGENTS.md 关键坑）。
+    private readonly ChoiceSetSetting _sort = new(
+        Key(nameof(Sort)),
+        "排序方式",
+        "由 Everything 服务端排序，覆盖全部结果；结果页顶部过滤条可临时切换",
+        [.. SortOrder.All.Select(spec => new ChoiceSetSetting.Choice(spec.Label, spec.Id))]);
+
     public bool ShowDetails => _showDetails.Value;
 
     public bool Fallback => _fallback.Value;
@@ -72,6 +80,12 @@ internal sealed class SettingsManager : JsonSettingsManager
         _ => Microsoft.CommandPalette.Extensions.ContentSize.Large,
     };
 
+    /// <summary>当前排序（默认取设置页里保存的值）。</summary>
+    public SortOrder.SortSpec Sort => SortOrder.FromId(_sort.Value);
+
+    /// <summary>过滤条切换排序后写回设置，下次打开面板沿用。</summary>
+    public void SetSort(string id) => _sort.Value = id;
+
     public SettingsManager()
     {
         FilePath = SettingsJsonPath();
@@ -82,6 +96,7 @@ internal sealed class SettingsManager : JsonSettingsManager
         Settings.Add(_instance);
         Settings.Add(_previewWidth);
         Settings.Add(_detailsSize);
+        Settings.Add(_sort);
 
         LoadSettings();
 

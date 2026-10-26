@@ -24,7 +24,7 @@ internal static class Program
         var session = new SearchSession(fake, pageSize: 3);
 
         // Page 1: source returns F0,F1,F2 + duplicate F0; session must dedupe.
-        var page1 = session.Start("test");
+        var page1 = session.Start("test", SortOrder.SizeDesc);
         Check("page1 count == 3", page1.Count == 3);
         Check("page1 has F0,F1,F2", Has(page1, "C:\\F0") && Has(page1, "C:\\F1") && Has(page1, "C:\\F2"));
         Check("page1 NextOffset == 4 (raw)", session.NextOffset == 4);
@@ -50,6 +50,7 @@ internal static class Program
         Check("no duplicate paths across pages", new HashSet<string>(all).Count == all.Count);
 
         Check("fake searched exactly 2 times", fake.Calls == 2);
+        Check("pagination reuses the sort", fake.LastSort == SortOrder.SizeDesc);
 
         Console.WriteLine(_failures == 0 ? "ALL PASS" : $"{_failures} FAILURES");
         return _failures == 0 ? 0 : 1;
@@ -71,9 +72,12 @@ internal sealed class FakeSearch : IEverythingSearch
 {
     public int Calls { get; private set; }
 
-    public IReadOnlyList<SearchHit> Search(string query, int offset, int count, out int total)
+    public SortOrder.SortSpec LastSort { get; private set; }
+
+    public IReadOnlyList<SearchHit> Search(string query, int offset, int count, SortOrder.SortSpec sort, out int total)
     {
         Calls++;
+        LastSort = sort;
         total = 7;
 
         var list = new List<SearchHit>();

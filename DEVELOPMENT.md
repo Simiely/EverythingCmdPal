@@ -107,3 +107,40 @@ src/EverythingCmdPal/
 - 根因：1.5a 与 1.4 并行设计
 - 解决：`EverythingLocator` 定位 exe（Program Files/运行中进程），拼接 `-instance` + `-search`
 - 预防：与 Everything 相关的外部调用统一走 locator + 实例名
+
+### 问题：来回切换「隐藏详细信息 / 显示详细信息」后要按多次返回
+
+**TL;DR**：双向都 `push` 新页面会让返回栈越切越深；回程必须用 `CommandResult.GoBack()`。
+
+- 问题：切 N 次后按一次返回退不出去
+- 根因：`CommandContextItem(page)` 每次都是 push；两个 ResultsPage 互相 push 成链
+- 解决：详情页 →「隐藏详细信息」仍 push；纯列表页 →「显示详细信息」返回 `CommandResult.GoBack()`（宿主 `Frame.GoBack()`，栈深恒定）
+- 预防：一对页面来回切换时，只允许一个方向 push，另一方向必须 pop
+
+### 问题：切换页面后搜索框文字消失（且无法用 SearchText 回填）
+
+**TL;DR**：宿主搜索框文本取自 backstack 里 VM 的 `SearchTextBox`，只在 VM 初始化时读一次；运行期写 `SearchText` 只对当前页生效。
+
+- 现象 1：从纯列表页 GoBack 回详情页，搜索框变空
+- 现象 2：在扩展里给非当前页写 `SearchText`，界面持续闪烁（像一直在搜）
+- 根因 1：`ShellPage` 切页时 `FilterBox.Text = page.SearchTextBox`（`SearchBar.xaml.cs` L104-115），该字段来自 `ListViewModel` 初始化（L1196-1203），不重读插件模型
+- 根因 2：Toolkit 的 `DynamicListPage.SearchText` setter 是 `SetSearchNoUpdate` **加同步调用 `UpdateSearchText`**（`DynamicListPage.cs` L9-18，且无同值判断）→ 我们的 `UpdateSearchText` 再排一次搜索 → `ConsumeAsync` 又 `SetPendingQuery` → 设 `SearchText` → 自激成环
+- 解决：两个方向都不回填（当前行为）；若必须回填，只能加防重入标志，且无法解决返回时为空
+- 预防：不要在 `SetPendingQuery`／后台回调里写 `SearchText`；官方 Calc 扩展用 `old == new` 短路防同类循环
+
+### 问题：运行时修改 ShowDetails 宿主不重新布局
+
+**TL;DR**：`ShowDetails` 只在页面构造时被宿主读取，运行期改值 + `OnPropertyChanged` + `RaiseItemsChanged` 都无效。
+
+- 问题：想在同一个页面上实时开关详情栏
+- 根因：宿主按页面实例构建时读取该属性，没有对应的变更事件
+- 解决：只能换页（`ShowDetails=false` 的新页面），代价是导航栈与搜索框文本
+- 预防：详情栏开关一律按「换页」设计，不要再尝试运行时切换
+
+### 问题：程序化设置 SearchText 必然全选且无法控制光标
+
+**TL;DR**：扩展 SDK 没有 caret/selection/focus API，全选发生在宿主 `SearchBar`。
+
+- 根因：`SearchBar.xaml.cs` 在 `InitialSearchText` 变化时 `SelectSearch()` → `SelectAll()`；GoBack 后同样 `FocusActiveControl()` + 全选
+- 解决：无（SDK 只暴露 `SearchText` 的 get/set）；导航 push 路径是 `Select(Text.Length, 0)`，光标在末尾
+- 预防：需要「文字保留」时，只在导航**前**给目标页设 `SearchText`（此时目标页不在前台）
