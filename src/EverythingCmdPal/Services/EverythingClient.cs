@@ -22,6 +22,9 @@ internal sealed class EverythingClient : IEverythingSearch
         _instanceName = (instanceName ?? string.Empty).Trim();
     }
 
+    /// <summary>最近一次连接尝试的结果，供页面决定空态提示。</summary>
+    public EverythingConnectionState State { get; private set; } = EverythingConnectionState.Unknown;
+
     public bool TryConnect()
     {
         if (_client != IntPtr.Zero) return true;
@@ -29,7 +32,7 @@ internal sealed class EverythingClient : IEverythingSearch
         if (_instanceName.Length > 0)
         {
             _client = Everything3Native.Everything3_ConnectW(_instanceName);
-            return _client != IntPtr.Zero;
+            return MarkConnected(_client != IntPtr.Zero);
         }
 
         _client = Everything3Native.Everything3_ConnectW(null);
@@ -38,7 +41,16 @@ internal sealed class EverythingClient : IEverythingSearch
             _client = Everything3Native.Everything3_ConnectW("1.5a");
         }
 
-        return _client != IntPtr.Zero;
+        return MarkConnected(_client != IntPtr.Zero);
+    }
+
+    /// <summary>记录连接结果；失败时顺带判断是「没开」还是「进程在但没管道」。</summary>
+    private bool MarkConnected(bool connected)
+    {
+        State = connected
+            ? EverythingConnectionState.Connected
+            : ConnectionDiagnostics.Classify(false, ConnectionDiagnostics.IsEverythingProcessRunning());
+        return connected;
     }
 
     public IReadOnlyList<SearchHit> Search(string query, int offset, int count, SortOrder.SortSpec sort, out int total)

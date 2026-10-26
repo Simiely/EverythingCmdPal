@@ -33,7 +33,7 @@ internal sealed class SettingsManager : JsonSettingsManager
     private readonly TextSetting _instance = new(
         Key(nameof(InstanceName)),
         "Everything 实例名",
-        "留空自动检测；Everything 1.5a 可填 1.5a",
+        "留空自动检测（1.5 alpha 期需填 1.5a；beta/正式版会恢复默认实例名）",
         string.Empty);
 
     private readonly ChoiceSetSetting _previewWidth = new(

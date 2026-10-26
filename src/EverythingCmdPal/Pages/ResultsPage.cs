@@ -228,9 +228,21 @@ internal sealed partial class ResultsPage : DynamicListPage, IDisposable
 
                     if (hits.Count == 0)
                     {
-                        SetEmpty(
-                            _session.Total == 0 ? "没有找到结果" : "没有更多结果",
-                            "检查 Everything 是否正在运行（需要 1.5 或更高版本）");
+                        // 连不上时要说清原因：未运行 / 进程在但没 1.5 管道（1.4 或实例名不对），
+                        // 不能一律显示「没有找到结果」。
+                        if (_client.State != EverythingConnectionState.Connected)
+                        {
+                            var (title, subtitle) = ConnectionDiagnostics.FailureText(_client.State);
+                            SetEmpty(title, subtitle);
+                        }
+                        else if (_session.Total == 0)
+                        {
+                            SetEmpty("没有找到结果", "换个关键词，或用 Everything 语法（ext:psd dm:thisweek）");
+                        }
+                        else
+                        {
+                            SetEmpty("没有更多结果", "已经到底了");
+                        }
                     }
                 }
                 catch (Exception ex)

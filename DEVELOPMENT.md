@@ -42,6 +42,9 @@ src/EverythingCmdPal/
 - 根因：请求属性后结果列表进入属性模式，路径读取依赖 `PATH_AND_NAME` 属性
 - 解决：不请求任何属性；大小/修改时间用 `FileInfo` 在预览阶段取
 - 预防：凡是用 SDK3 新增取值，先写独立 harness（`tools/QueryTest`）验证
+- 复验（2026-10-26，SDK 3.0.0.9）：`QueryTest -- "*.sln" props` 返回的 50 条**全部 `len=0`**，
+  同口径不加属性时 60 条路径完整 → 「结果高亮」（只能经 `AddSearchPropertyRequestHighlighted` 走属性模式）
+  继续不做；再加条目的 Title/Subtitle 是纯字符串，列表行本来也不支持 markdown
 
 ### 问题：手工打包报 0x80073CF6（资源语言 x-generate 无效）
 

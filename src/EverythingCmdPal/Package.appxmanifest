@@ -11,7 +11,7 @@
   <Identity
     Name="EverythingCmdPal"
     Publisher="CN=EverythingCmdPal Dev"
-    Version="1.3.3.2" />
+    Version="1.3.3.3" />
 
   <Properties>
     <DisplayName>Everything for Command Palette</DisplayName>

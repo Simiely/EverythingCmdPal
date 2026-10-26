@@ -2,6 +2,18 @@
 
 所有版本的变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.3.3.3] - 2026-10-26
+
+- 修复：连不上 Everything 时一律落到「没有找到结果」，看不出原因。现在区分两种失败——
+  「Everything 未运行」与「进程在但拿不到 1.5 管道（1.4 / 实例名不符 / 未开 `allow_ipc_pipe`）」，
+  各给可操作提示；连上但没搜到时改为提示换关键词或 Everything 语法
+- 修复：预览缓存（`%TEMP%\EverythingCmdPal\preview`）只增不减。新增 300 条 / 256 MB 上限，
+  超限按最后写入时间淘汰最旧的（尽力而为，被占用的文件跳过）
+- 文档：设置项「Everything 实例名」说明改为「留空自动检测（1.5 alpha 期需填 1.5a；beta/正式版会恢复默认实例名）」
+- 文档：PLAN §12 四条待确认按官方一手依据定案（预览形态 / fallback 默认 / 拖拽文本 / 1.4 通道），
+  并补齐 P2 四项处置
+- 工具：`tools/QueryTest` 新增 `--probe` 连接探针；`tools/SelfTest` 新增 6 条连接诊断断言
+
 ## [1.3.3.2] - 2026-10-26
 
 - 回退：移除 1.3.3.1 的跨实例 `SearchText` 同步。写 `SearchText` 会让宿主再次触发页面搜索，形成往返循环导致持续闪烁

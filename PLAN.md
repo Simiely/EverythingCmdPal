@@ -450,9 +450,22 @@ winget install Microsoft.VisualStudio.2022.Community
 
 ---
 
-## 12. 待确认
+## 12. 待确认 → 已定（2026-10-26）
 
-1. **预览主形态**：详情栏优先（推荐，零操作）还是 Peek 优先（更完整但多一次按键）？
-2. **fallback 默认开还是关**？开了输入任何词都会多一行，可能干扰其他扩展。
-3. **拖拽是否默认附带路径文本**？默认关（拖进编辑器是附件而不是路径）。
-4. 是否需要 **1.4 兼容通道**（只在你要装到别的旧机器上时需要）。
+四条都有官方一手依据，不再悬置；代码改动落在 1.3.3.3。
+
+| # | 问题 | 结论 | 依据 |
+|---|---|---|---|
+| 1 | 预览主形态 | **详情栏优先**（`Details.HeroImage` + `Body` markdown），Peek 深链做补充 | 公开 [`IDetails`](https://learn.microsoft.com/en-us/windows/powertoys/command-palette/microsoft-commandpalette-extensions/idetails) 至今只有 Body / HeroImage / Metadata / Title，**没有 `Content`**；`IDetails2` 未随 0.11 / 0.12 发布。这不是取舍，是唯一可行解 |
+| 2 | fallback 默认开关 | **默认开**，代码不动 | 宿主 `MainListRanker`：fallback 参与正常排名，无匹配时 floor 到 `RankTier.FallbackFloor`，**永不被丢弃**，不会挤掉真实结果；宿主设置另有逐扩展 fallback 开关（`FallbackSettingsViewModel.IsEnabled` / `IncludeInGlobalResults`）。本扩展已有 `>` `$` `=` 前缀抑制 |
+| 3 | 拖拽附带路径文本 | **不带**（维持现状），不加开关 | `DataPackage` 同时放 StorageItems + Text 会让聊天 / 编辑器类目标改走文本分支，文件从「附件」变成「一串路径」；「复制完整路径」动作已覆盖该需求 |
+| 4 | 1.4 兼容通道 | **不做** | [官方 1.5 SDK 说明](https://voidtools.com/forum/viewtopic.php?t=15853)：v3 只连 1.5 命名管道，v2 才是 1.4。支持 1.4 = 第二套 P/Invoke + WM_COPYDATA 回复窗口 + 消息泵 + 双路测试；而 1.5 beta 已公开发布 |
+
+### P2 四项处置
+
+| 项 | 处置 |
+|---|---|
+| 缩略图磁盘缓存 | 已有（`PreviewService` 按 path+mtime+width 落 PNG）；1.3.3.3 补条数 / 体积上限与淘汰 |
+| 结果高亮 | 暂缓。高亮只能经 `AddSearchPropertyRequestHighlighted` 走属性模式，而属性模式会让 `GetResultFullPathNameW` 全返回 0（SDK 3.0.0.9 实测）；且条目的 Title / Subtitle 是纯字符串，列表行不支持 markdown |
+| 1.4 IPC 通道 | 不做（见上表第 4 条）；改为连不上时给明确提示（1.3.3.3） |
+| WinGet 上架 + Gallery | 缓做。官方现行 WinGet 指南要求 **unpackaged EXE + Inno Setup**（`WindowsPackageType=None` + HKCU CLSID 注册），不是 MSIX；真要发布再切，顺带消掉自签名证书那一类坑 |

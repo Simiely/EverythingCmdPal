@@ -31,6 +31,10 @@ internal static class PreviewService
         ".ps1", ".bat", ".cmd", ".sh", ".sql", ".java", ".go", ".rs", ".toml",
     };
 
+    /// <summary>预览缓存上限：条数与总体积，超过就按最后写入时间淘汰最旧的。</summary>
+    private const int MaxCachedPreviews = 300;
+    private const long MaxCacheBytes = 256L * 1024 * 1024;
+
     public static async Task FillAsync(Details details, string path, bool isFolder, int previewWidth)
     {
         try
@@ -148,14 +152,63 @@ internal static class PreviewService
             var buffer = new byte[length];
             reader.ReadBytes(buffer);
 
-            await using var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-            await file.WriteAsync(buffer.AsMemory(0, (int)length));
-            return file.Length > 0 ? target : null;
+            await using (var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            {
+                await file.WriteAsync(buffer.AsMemory(0, (int)length));
+                if (file.Length == 0) return null;
+            }
+
+            PruneCache(directory);
+            return target;
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// 预览缓存只增不减会撑满 %TEMP%：超过条数或体积上限时，按最后写入时间删最旧的。
+    /// 尽力而为，删不掉（被占用）就跳过，不影响预览本身。返回实际删除的文件数。
+    /// </summary>
+    internal static int PruneCache(string directory, int maxFiles = MaxCachedPreviews, long maxBytes = MaxCacheBytes)
+    {
+        var deleted = 0;
+        try
+        {
+            var files = new DirectoryInfo(directory).GetFiles("*.png");
+            long totalBytes = 0;
+            foreach (var file in files) totalBytes += file.Length;
+
+            if (files.Length <= maxFiles && totalBytes <= maxBytes) return 0;
+
+            Array.Sort(files, static (a, b) => a.LastWriteTimeUtc.CompareTo(b.LastWriteTimeUtc));
+
+            var remaining = files.Length;
+            foreach (var file in files)
+            {
+                if (remaining <= maxFiles && totalBytes <= maxBytes) break;
+
+                try
+                {
+                    var size = file.Length;
+                    file.Delete();
+                    remaining--;
+                    totalBytes -= size;
+                    deleted++;
+                }
+                catch
+                {
+                    // 正被宿主或其他实例读取，下一轮再清。
+                }
+            }
+        }
+        catch
+        {
+            // 清理失败不影响预览。
+        }
+
+        return deleted;
     }
 
     private static async Task<string?> ReadHeadAsync(string path, int maxBytes)

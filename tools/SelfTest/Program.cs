@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using EverythingCmdPal.Services;
 
 namespace SelfTest;
@@ -51,6 +52,39 @@ internal static class Program
 
         Check("fake searched exactly 2 times", fake.Calls == 2);
         Check("pagination reuses the sort", fake.LastSort == SortOrder.SizeDesc);
+
+        // 连接诊断（1.3.3.3）：连不上时不能把原因说成「没有找到结果」。
+        Check("classify: connected", ConnectionDiagnostics.Classify(true, false) == EverythingConnectionState.Connected);
+        Check("classify: no process -> NotRunning", ConnectionDiagnostics.Classify(false, false) == EverythingConnectionState.NotRunning);
+        Check("classify: process without pipe -> RunningWithoutPipe", ConnectionDiagnostics.Classify(false, true) == EverythingConnectionState.RunningWithoutPipe);
+        Check("text: NotRunning", ConnectionDiagnostics.FailureText(EverythingConnectionState.NotRunning).Title == "Everything 未运行");
+        Check("text: RunningWithoutPipe mentions IPC", ConnectionDiagnostics.FailureText(EverythingConnectionState.RunningWithoutPipe).Title.Contains("IPC"));
+        Check("text: Connected -> no-result hint", ConnectionDiagnostics.FailureText(EverythingConnectionState.Connected).Title == "没有找到结果");
+
+        // 预览缓存淘汰（1.3.3.3）：超条数/体积上限时按最后写入时间删最旧，未超限时不动。
+        var cacheDir = Path.Combine(Path.GetTempPath(), "EverythingCmdPal-SelfTest-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(cacheDir);
+        try
+        {
+            for (var i = 0; i < 5; i++)
+            {
+                var file = Path.Combine(cacheDir, $"p{i}.png");
+                File.WriteAllBytes(file, new byte[16]);
+                File.SetLastWriteTimeUtc(file, new DateTime(2026, 10, 26, 0, i, 0, DateTimeKind.Utc));
+            }
+
+            Check("prune: no-op under limits", PreviewService.PruneCache(cacheDir, 10, long.MaxValue) == 0);
+            Check("prune: deletes oldest down to count cap", PreviewService.PruneCache(cacheDir, 3, long.MaxValue) == 2);
+            Check("prune: newest three survive",
+                File.Exists(Path.Combine(cacheDir, "p2.png"))
+                && File.Exists(Path.Combine(cacheDir, "p3.png"))
+                && File.Exists(Path.Combine(cacheDir, "p4.png")));
+            Check("prune: byte cap also enforced", PreviewService.PruneCache(cacheDir, 100, 20) == 2);
+        }
+        finally
+        {
+            try { Directory.Delete(cacheDir, true); } catch { }
+        }
 
         Console.WriteLine(_failures == 0 ? "ALL PASS" : $"{_failures} FAILURES");
         return _failures == 0 ? 0 : 1;

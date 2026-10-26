@@ -56,6 +56,25 @@ internal static class Program
 {
     private static unsafe int Main(string[] args)
     {
+        // 连接探针：验证「进程在、管道不可用」这一分支的真实输入，
+        // 供 1.3.3.3 的空态提示用。用法：dotnet run --project tools\QueryTest -- --probe
+        if (args.Length > 0 && args[0] == "--probe")
+        {
+            var a = Native.Everything3_ConnectW(null);
+            var b = a == IntPtr.Zero ? Native.Everything3_ConnectW("1.5a") : IntPtr.Zero;
+            var c = Native.Everything3_ConnectW("zzz-no-such-instance");
+
+            Console.WriteLine($"connect(null)={(a != IntPtr.Zero ? "OK" : "NULL")}");
+            Console.WriteLine($"connect(1.5a)={(b != IntPtr.Zero ? "OK" : "NULL")}");
+            Console.WriteLine($"connect(bogus)={(c != IntPtr.Zero ? "OK" : "NULL")}");
+            Console.WriteLine($"process_running={System.Diagnostics.Process.GetProcessesByName("Everything").Length > 0}");
+
+            if (a != IntPtr.Zero) Native.Everything3_DestroyClient(a);
+            if (b != IntPtr.Zero) Native.Everything3_DestroyClient(b);
+            if (c != IntPtr.Zero) Native.Everything3_DestroyClient(c);
+            return 0;
+        }
+
         var query = args.Length > 0 ? args[0] : "*.sln";
         var withProps = args.Length > 1 && args[1] == "props";
 
