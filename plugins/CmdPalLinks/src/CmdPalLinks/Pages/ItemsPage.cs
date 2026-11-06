@@ -205,22 +205,15 @@ internal sealed partial class ItemsPage : DynamicListPage
             });
         }
 
-        // 「批量添加」「批量编辑」固定在列表最后（同一组末项），只在未输入检索词时出现
-        // （不参与检索、不干扰结果）；空库时交给 EmptyContent，不追加这两行。
-        if (count >= _results.Length && _results.Length > 0 && _settings.ShowBulkAdd && string.IsNullOrWhiteSpace(_query))
+        // 「批量编辑」固定在列表最后，只在未输入检索词时出现（不参与检索、不干扰结果）；
+        // 空库时交给 EmptyContent，不追加这一行。导入入口只在行内「更多」里保留。
+        if (count >= _results.Length && _results.Length > 0 && string.IsNullOrWhiteSpace(_query))
         {
-            rows.Add(new ListItem(_importPage)
-            {
-                Title = "批量添加",
-                Subtitle = "从 CSV / JSON / TXT 导入",
-                Icon = Icons.Import,
-            });
-
-            // 宿主扩展页不能内嵌 HTML/WebView：这里解出随包的编辑器文件，用系统默认浏览器打开。
-            rows.Add(new ListItem(new OpenHtmlEditorCommand())
+            // 宿主扩展页不能内嵌 HTML/WebView：这里起回环 HTTP 服务，用系统默认浏览器打开编辑器。
+            rows.Add(new ListItem(new OpenHtmlEditorCommand(_store))
             {
                 Title = "批量编辑",
-                Subtitle = "用默认浏览器打开 HTML 编辑器",
+                Subtitle = "浏览器打开编辑器，直接读写现有条目",
                 Icon = Icons.Edit,
             });
         }

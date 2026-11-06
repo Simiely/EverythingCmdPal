@@ -635,6 +635,30 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
 - `ThumbnailHelper` 在扩展进程内的线程模型（Shell COM/MTA）是否稳定，未验证。
 - 网格模式下图标尺寸与裁剪由宿主决定，未验证。
 
+### 10.6 自绘图标与 emoji 修复（2026-11-06）
+
+- **为什么不用宿主字形**：内置图标（`Icons.*`）用 `new IconInfo("\uE71B")` 字形，工作正常；但自定义图标需要色块底 + 透明底 +
+  单色 emoji 组合，宿主字形无法表达底色，因此仍走 `CustomIconRenderer` 生成 light/dark PNG，再由
+  `new IconInfo(new IconData(lightPath), new IconData(darkPath))` 交给宿主。
+- **emoji 乱码根因**：`CustomIconRenderer` 的 `CreateFontW` / `DrawTextW` P/Invoke 未声明 `CharSet`（默认 Ansi），
+  C# `string` 先被转换成 ANSI（本机 ACP=936）再传给 `...W` 函数按 UTF-16 读取。emoji（代理对）与中文都被转成 `?`
+  （例如 `📁` → `0x003F 0x003F`），`DrawTextW` 再把它们当成 `U+3F3F` 等汉字绘制，于是图标显示为乱码字形。
+  这也是中文标题首字色块显示异常的原因。修复：两个 P/Invoke 都加 `CharSet = CharSet.Unicode`；
+  自绘缓存 key 增加 `r2|` 前缀，避免复用历史错误 PNG。
+- **彩色 emoji 限制与降级**：宿主基线 PowerToys 0.100.2 + `Microsoft.CommandPalette.Extensions` 0.11.260520004，
+  自绘走 GDI/GDI+，只能得到 emoji 的单色字形轮廓（COLR 彩色字形不参与，实测 `📁` / `🛠️` / `🚀` 均为单色可辨轮廓）。
+  可用降级：字形无墨迹（不支持的组合）→ 首字；`block` / 有底色 → 底色块 + 白字；需要彩色 emoji 时只能改走
+  宿主字形（当前版本未采用，避免非 BMP 字形在宿主侧被 <1em 判定为路径）。
+- **CSV / 编辑器字段**：`links.json` 的 `iconKind` / `iconColor` / `iconEmoji` ↔ CSV 第 8 列 `icon` ↔ 编辑器行模型；
+  `LibraryStore.ReplaceAll` 不再把 `block` + 空底色降级成 `auto`。
+
+### 10.7 编辑器闭环（2026-11-06）
+
+- `EditorServer`：`TcpListener(IPAddress.Loopback, 0)` 随机端口，32 字节随机 token（Base64Url），
+  请求校验 `Host` 头 + `X-CmdPalLinks-Token`（定长比较）；`GET /` 返回同源编辑器 HTML，`GET/POST /api/links` 读写；
+  5MB 请求体上限、15s 请求超时、20 分钟空闲超时，扩展 `Dispose` 时关闭；异常只记 method/path/status，不记端口与 token。
+- 保存复用 `LibraryStore.ReplaceAll`（`lock (_gate)` + `SaveLocked` 原子写 + `.bak`），成功触发 `Changed` 让列表失效重读。
+
 ---
 
 ## 11. M2.2：首页简化与网格实机测试（2026-11-05 已执行）

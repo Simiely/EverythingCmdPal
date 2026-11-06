@@ -11,7 +11,10 @@ PowerToys Command Palette 的「链接库」扩展：把常用的网址、文件
 - 条目动作：打开所在文件夹、复制目标、编辑、删除；文件/文件夹失效时标 `⚠ 路径不存在` 与「缺失」标签，不自动删除。
 - 设置项：布局（列表 / 中网格）、显示完整路径、显示副标题、显示标签，改动即时生效并落盘。
 - 数据：包内 `LocalState/links.json` 单文件 JSON（原子写 + `.bak` 回退），索引在内存构建。
-- 导入/导出：CSV（`type,target,title,alias,tags,emoji,color`）/ JSON，两段式预览后确认导入，可撤销上次导入。
+- 批量编辑：列表末项「批量编辑」启动扩展进程内的回环 HTTP 服务并打开浏览器编辑器，加载即显示现有条目，
+  保存直接写回 `links.json`（随机端口 + 一次性 token，只绑 `127.0.0.1`，端口与 token 不落盘、不写日志；空闲 20 分钟自动关闭）。
+- 导入/导出：CSV（`type,target,title,alias,tags,emoji,color,icon`，旧版 7 列仍可导入）/ JSON，两段式预览后确认导入，可撤销上次导入。
+- 图标：自定义 emoji / 色块 / 透明底由 GDI 自绘为单色 PNG（彩色 emoji 字形为已知限制）；无自定义图标时用站点 favicon / 类型字形 / 首字色块。
 
 ## 安装
 
@@ -29,7 +32,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File shared\build\package.ps1 -Pl
 
 1. 打开 Command Palette（`Win+Alt+Space`）；
 2. 输入「链接库」进入列表，或直接输入标题/别名/标签检索；
-3. 在列表里按 `添加条目` 新建；对已有条目用右键菜单（`MoreCommands`）编辑/复制/打开所在文件夹/删除。
+3. 在列表里按 `添加条目` 新建；对已有条目用右键菜单（`MoreCommands`）编辑/复制/打开所在文件夹/删除；
+4. 批量维护用列表末项「批量编辑」：浏览器打开编辑器，改完点「保存到插件」即写回；CSV 导入/导出仍可在编辑器内或行内进行。
 
 ## 排障
 
@@ -46,8 +50,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File shared\build\package.ps1 -Pl
 # 图标资源（单源生成 Assets 下的 PNG）
 python plugins\CmdPalLinks\tools\gen-icons.py
 
-# 存储层测试
+# 存储层 / 编辑器接口自测（临时目录，不碰用户数据）
 dotnet build plugins\CmdPalLinks\tests\StoreHarness\StoreHarness.csproj
+# <dir> editor <seed links.json>：真实 HTTP 接口读 7 条 + 加/删 + 改图标写回
+# <dir> csv：8 列（含 icon）往返 + 旧版 7 列兼容
 ```
 
 文档：[design.md](docs/design.md)（调研与方案）、[spec.md](docs/spec.md)（实施规格）、[tasks.md](docs/tasks.md)（任务清单）、[self-test.md](docs/self-test.md)（自测步骤）、[ux-icon-sort-plan.md](docs/ux-icon-sort-plan.md)（M3 交互方案）。
@@ -55,4 +61,4 @@ dotnet build plugins\CmdPalLinks\tests\StoreHarness\StoreHarness.csproj
 ## 发版
 
 按 [docs/release.md](../../docs/release.md)：tag `cmdpallinks-v<版本>`，资产 `CmdPalLinks-<版本>.msix` + `.sha256`，
-`Identity Version` 每次递增（当前 `0.1.2.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+`Identity Version` 每次递增（当前 `0.1.3.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)。

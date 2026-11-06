@@ -134,10 +134,11 @@ internal sealed class IconCache
 
     /// <summary>
     /// 自绘图标（色块/透明底/emoji）：按 kind|color|emoji|title 哈希缓存，首次同步生成 light/dark 两份 PNG。
+    /// key 带渲染版本前缀：渲染实现变化后旧 PNG 不再命中，避免复用历史错误产物。
     /// </summary>
     private IconInfo GetCustom(LinkItem item)
     {
-        var key = string.Join(
+        var key = "r2|" + string.Join(
             '|',
             IconKinds.Normalize(item.IconKind),
             item.IconColor ?? string.Empty,

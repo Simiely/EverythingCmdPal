@@ -9,6 +9,8 @@ namespace CmdPalLinks.Services;
 /// 自绘图标：圆角色块 / 透明底 + 单色 emoji（GDI 字形掩膜 + 人工着色）。
 /// 说明：GDI/GDI+ 无法渲染 Segoe UI Emoji 的彩色字形，这里只取字形轮廓做单色掩膜，
 /// 因此 emoji 会丢失原色与渐变（这是当前版本的已知视觉上限）。
+/// 注意：GDI 的 W 版本 API 必须按 Unicode 编组（见下方 DllImport 的 CharSet），
+/// 否则非 ASCII 文本（emoji、中文标题）会先被转成 ANSI 再按 UTF-16 解码，渲染成乱码字形。
 /// </summary>
 internal static class CustomIconRenderer
 {
@@ -360,7 +362,7 @@ internal static class CustomIconRenderer
     [DllImport("gdi32.dll")]
     private static extern bool DeleteDC(IntPtr hdc);
 
-    [DllImport("gdi32.dll")]
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr CreateFontW(
         int height,
         int width,
@@ -383,6 +385,6 @@ internal static class CustomIconRenderer
     [DllImport("gdi32.dll")]
     private static extern int SetTextColor(IntPtr hdc, int color);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int DrawTextW(IntPtr hdc, string text, int count, ref Rect rect, uint format);
 }

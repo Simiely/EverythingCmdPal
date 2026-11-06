@@ -46,6 +46,8 @@ internal readonly record struct ImportResult(ImportStatus Status, int Added, int
 
 internal readonly record struct UndoResult(bool Success, int Restored, string Message);
 
+internal readonly record struct ReplaceResult(bool Success, int Total, int Added, int Updated, int Removed, string Message, int ErrorLine);
+
 internal sealed class LibraryStore
 {
     /// <summary>
@@ -505,6 +507,189 @@ internal sealed class LibraryStore
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 编辑器整表保存：先全量校验，再在同一个锁与同一次原子写里替换内存与磁盘。
+    /// 已有条目按 id（其次按判重键）保留 createdAt/openCount/lastOpenedAt，避免编辑一次丢掉统计。
+    /// </summary>
+    public ReplaceResult ReplaceAll(IReadOnlyList<LinkItem> incoming)
+    {
+        WaitForLoad();
+
+        var prepared = new List<(LinkItem Item, string Key)>(incoming.Count);
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var now = DateTimeOffset.UtcNow;
+
+        for (var i = 0; i < incoming.Count; i++)
+        {
+            var source = incoming[i];
+            var line = i + 1;
+            var kind = (source.Kind ?? string.Empty).Trim().ToLowerInvariant();
+            var target = (source.Target ?? string.Empty).Trim();
+
+            if (!LinkKinds.IsValid(kind))
+            {
+                return Fail(line, "类型必须是 url、file 或 folder");
+            }
+
+            if (!DedupeKey(kind, target, out var key, out var error))
+            {
+                return Fail(line, error);
+            }
+
+            if (seen.TryGetValue(key, out var first))
+            {
+                return Fail(line, $"target 与第 {first} 行重复");
+            }
+
+            seen[key] = line;
+
+            var emoji = FirstTextElement(source.IconEmoji);
+            var colorText = (source.IconColor ?? string.Empty).Trim();
+            var iconKind = IconKinds.Normalize(source.IconKind);
+
+            if (string.Equals(colorText, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Transparent;
+                colorText = string.Empty;
+            }
+            else if (colorText.Length > 0)
+            {
+                if (!IsHexColor(colorText))
+                {
+                    return Fail(line, "底色需为 #RRGGBB、none 或留空");
+                }
+
+                colorText = colorText.ToUpperInvariant();
+                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Block;
+            }
+            else if (iconKind != IconKinds.Transparent && iconKind != IconKinds.Block)
+            {
+                // 色块可以没有显式底色（渲染时用默认色），不能在这里被降级成 auto 丢掉。
+                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Auto;
+            }
+
+            var item = new LinkItem
+            {
+                Id = source.Id,
+                Kind = kind,
+                Title = string.IsNullOrWhiteSpace(source.Title) ? DefaultTitle(kind, target) : source.Title.Trim(),
+                Target = target,
+                Aliases = Clean(source.Aliases),
+                Tags = Clean(source.Tags),
+                IconKind = iconKind,
+                IconColor = colorText,
+                IconEmoji = emoji,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+
+            prepared.Add((item, key));
+        }
+
+        var added = 0;
+        var updated = 0;
+        var removed = 0;
+        var total = 0;
+
+        lock (_gate)
+        {
+            var byId = new Dictionary<Guid, LinkItem>();
+            var byKey = new Dictionary<string, LinkItem>(StringComparer.OrdinalIgnoreCase);
+            foreach (var existing in _items)
+            {
+                byId[existing.Id] = existing;
+                if (DedupeKey(existing.Kind, existing.Target, out var existingKey, out _))
+                {
+                    byKey[existingKey] = existing;
+                }
+            }
+
+            var previous = _items.ToArray();
+            var next = new List<LinkItem>(prepared.Count);
+            var matched = new HashSet<Guid>();
+            var startedAt = DateTimeOffset.UtcNow;
+
+            foreach (var (item, key) in prepared)
+            {
+                LinkItem? existing = null;
+                if (item.Id != Guid.Empty && byId.TryGetValue(item.Id, out var byIdItem))
+                {
+                    existing = byIdItem;
+                }
+                else
+                {
+                    byKey.TryGetValue(key, out existing);
+                }
+
+                if (existing is not null)
+                {
+                    matched.Add(existing.Id);
+                    item.Id = existing.Id;
+                    item.CreatedAt = existing.CreatedAt;
+                    item.OpenCount = existing.OpenCount;
+                    item.LastOpenedAt = existing.LastOpenedAt;
+                    updated++;
+                }
+                else
+                {
+                    item.Id = Guid.NewGuid();
+                    item.CreatedAt = startedAt;
+                    added++;
+                }
+
+                item.UpdatedAt = startedAt;
+                next.Add(item);
+            }
+
+            removed = previous.Count(existing => !matched.Contains(existing.Id));
+            _items.Clear();
+            _items.AddRange(next);
+            total = next.Count;
+
+            try
+            {
+                SaveLocked();
+            }
+            catch (Exception ex)
+            {
+                _items.Clear();
+                _items.AddRange(previous);
+                HostLog.Error($"store replace save failed: {ex.GetType().Name}: {ex.Message}");
+                return Fail(0, $"写入磁盘失败：{ex.Message}");
+            }
+        }
+
+        Changed?.Invoke();
+        return new ReplaceResult(true, total, added, updated, removed, $"已保存 {total} 条（新增 {added}、更新 {updated}、删除 {removed}）", 0);
+    }
+
+    private static ReplaceResult Fail(int line, string message)
+        => new(false, 0, 0, 0, 0, message, line);
+
+    private static string FirstTextElement(string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        return text.Length == 0 ? string.Empty : System.Globalization.StringInfo.GetNextTextElement(text).Trim();
+    }
+
+    private static bool IsHexColor(string value)
+    {
+        if (value.Length != 7 || value[0] != '#')
+        {
+            return false;
+        }
+
+        for (var i = 1; i < value.Length; i++)
+        {
+            if (!Uri.IsHexDigit(value[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>导出完整 JSON（含 icon 字段、schemaVersion、updatedAt），可原样回导。</summary>

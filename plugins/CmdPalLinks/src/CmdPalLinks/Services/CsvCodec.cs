@@ -34,17 +34,22 @@ internal readonly record struct ImportParseResult(ImportPreview? Preview, string
 
 /// <summary>
 /// CSV/JSON/TXT 解析与 CSV 导出。
-/// CSV 表头严格为 type,target,title,alias,tags,emoji,color（顺序一致）。
+/// CSV 表头为 type,target,title,alias,tags,emoji,color,icon；旧版 7 列（无 icon）仍可导入。
+/// icon 列保存 IconKind，避免 auto/block/transparent/emoji 在 CSV 往返中被按颜色推断后丢失。
 /// </summary>
 internal static class CsvCodec
 {
-    public const string Header = "type,target,title,alias,tags,emoji,color";
+    public const string Header = "type,target,title,alias,tags,emoji,color,icon";
+
+    public const string LegacyHeader = "type,target,title,alias,tags,emoji,color";
 
     private const int MaxRows = 10_000;
 
     private const int MaxBytes = 5 * 1024 * 1024;
 
     private static readonly string[] HeaderFields = Header.Split(',');
+
+    private static readonly string[] LegacyHeaderFields = LegacyHeader.Split(',');
 
     private static readonly JsonSerializerOptions JsonReadOptions = new()
     {
@@ -99,6 +104,13 @@ internal static class CsvCodec
 
     public static ImportParseResult ParseCsv(string text, string source, LibraryStore store)
     {
+        // 导出文件带 UTF-8 BOM；从字符串导入（如把导出的 CSV 再贴回来）时先去掉，
+        // 否则首列表头会变成 “\uFEFFtype”，严格表头校验会失败。
+        if (text.Length > 0 && text[0] == '\uFEFF')
+        {
+            text = text[1..];
+        }
+
         var records = ParseRecords(text);
         if (records.Count == 0)
         {
@@ -106,9 +118,21 @@ internal static class CsvCodec
         }
 
         var header = records[0].Fields.Select(field => field.Trim()).ToArray();
-        if (header.Length != HeaderFields.Length || !header.SequenceEqual(HeaderFields, StringComparer.OrdinalIgnoreCase))
+        string[]? expected = null;
+        if (header.Length == HeaderFields.Length)
         {
-            return new ImportParseResult(null, $"表头不匹配。期望：{Header}；实际：{string.Join(',', header)}");
+            expected = HeaderFields;
+        }
+        else if (header.Length == LegacyHeaderFields.Length)
+        {
+            expected = LegacyHeaderFields;
+        }
+
+        if (expected is null || !header.SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+        {
+            return new ImportParseResult(
+                null,
+                $"表头不匹配。期望：{Header}（旧版 {LegacyHeader} 也可）；实际：{string.Join(',', header)}");
         }
 
         if (records.Count - 1 > MaxRows)
@@ -128,9 +152,9 @@ internal static class CsvCodec
                 continue;
             }
 
-            if (record.Fields.Count != HeaderFields.Length)
+            if (record.Fields.Count != header.Length)
             {
-                preview.Issues.Add(new ImportIssue(record.Line, $"字段数为 {record.Fields.Count}，应为 {HeaderFields.Length}（含逗号字段请用双引号包裹）"));
+                preview.Issues.Add(new ImportIssue(record.Line, $"字段数为 {record.Fields.Count}，应为 {header.Length}（含逗号字段请用双引号包裹）"));
                 continue;
             }
 
@@ -353,6 +377,20 @@ internal static class CsvCodec
             if (emoji.Length > 0)
             {
                 iconKind = IconKinds.Emoji;
+            }
+        }
+
+        // 新版 CSV 的 icon 列是权威值：能保留 block 无底色、transparent 等无法仅凭颜色推断的形态。
+        if (fields.Length > LegacyHeaderFields.Length)
+        {
+            var explicitKind = fields[LegacyHeaderFields.Length].Trim().ToLowerInvariant();
+            if (IconKinds.IsValid(explicitKind))
+            {
+                iconKind = explicitKind;
+            }
+            else if (explicitKind.Length > 0)
+            {
+                preview.Warnings.Add(new ImportIssue(line, $"icon “{fields[LegacyHeaderFields.Length]}”无效（应为 auto/block/transparent/emoji），已按颜色推断"));
             }
         }
 
@@ -584,7 +622,8 @@ internal static class CsvCodec
                 .Append(Escape(string.Join('|', item.Aliases ?? Array.Empty<string>()))).Append(',')
                 .Append(Escape(string.Join('|', item.Tags ?? Array.Empty<string>()))).Append(',')
                 .Append(Escape(item.IconEmoji ?? string.Empty)).Append(',')
-                .Append(Escape(color))
+                .Append(Escape(color)).Append(',')
+                .Append(Escape(IconKinds.Normalize(item.IconKind)))
                 .Append("\r\n");
         }
 

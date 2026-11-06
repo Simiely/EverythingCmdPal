@@ -18,7 +18,13 @@
     <Compile Include="Program.cs" />
     <Compile Include="..\..\src\CmdPalLinks\Models\LinkItem.cs" Link="LinkItem.cs" />
     <Compile Include="..\..\src\CmdPalLinks\Services\LibraryStore.cs" Link="LibraryStore.cs" />
+    <Compile Include="..\..\src\CmdPalLinks\Services\CsvCodec.cs" Link="CsvCodec.cs" />
+    <Compile Include="..\..\src\CmdPalLinks\Services\EditorServer.cs" Link="EditorServer.cs" />
     <Compile Include="..\..\src\CmdPalLinks\HostLog.cs" Link="HostLog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\src\CmdPalLinks\Assets\links-editor.html" Link="Assets\links-editor.html" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using CmdPalLinks.Services;
 using Microsoft.CommandPalette.Extensions;
 
 namespace CmdPalLinks;
@@ -31,5 +32,10 @@ public sealed partial class CmdPalLinksExtension : IExtension, IDisposable
         };
     }
 
-    public void Dispose() => this._extensionDisposedEvent.Set();
+    public void Dispose()
+    {
+        // 扩展进程退出时释放编辑器端口，避免端口长期占用。
+        EditorServer.Shutdown();
+        this._extensionDisposedEvent.Set();
+    }
 }

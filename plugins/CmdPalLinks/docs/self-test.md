@@ -50,6 +50,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File plugins/CmdPalLinks/tools/in
 4. **滚动**：网格下滚轮、PageDown、方向键；看最后一行是否可见、面板是否被关闭。
 5. **条数**：用 30/100/500 条数据（`.testdata\gridset\links-30/100/500.json`，复制为 `LocalState\links.json` 后重启 CmdPal）。预期首次 100 条，滚到底自动追加 100。
 6. **设置**：4 项逐个切换 → 立即生效；重启 CmdPal 后仍生效（`settings.json` 保留）。
+7. **批量编辑（0.1.3.0）**：列表末项只有「批量编辑」。点击后浏览器应打开 `http://127.0.0.1:<随机端口>/?token=...`，
+   页面统计条显示「已连接」与现有条数（当前 7），每行左侧有图标预览（emoji / 色块首字 / favicon）。
+   改内容后点「保存到插件」→ 提示成功并刷新 id；`LocalState\links.json` 立即更新且生成 `.bak`。失败会弹窗显示服务端原因。
+8. **emoji 图标**：给任一条设置 emoji（如 `📁`）→ 保存 → 列表/搜索/详情应显示清晰单色轮廓（不是汉字乱码、不是方框）。
+   中文标题的首字色块也应显示正确汉字。彩色 emoji 目前为单色轮廓（GDI 限制，见 `design.md` §10.6）。
+9. **CSV 往返图标**：导出 CSV（8 列，末列 `icon`）→ 删除/清空后回导 → 各条 `iconKind/iconColor/iconEmoji` 不变；
+   旧版 7 列 CSV 仍可导入（按 emoji + color 推断形态）。
 
 ## 5. 日志
 ```

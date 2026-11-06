@@ -10,7 +10,7 @@
 | MSIX Identity Name | `CmdPalLinks` |
 | PackageFamilyName | `CmdPalLinks_byt16r9dq2e2y` |
 | Publisher | `CN=EverythingCmdPal Dev`（与 EverythingCmdPal 共用开发证书） |
-| 当前版本 | `0.1.2.0` |
+| 当前版本 | `0.1.3.0` |
 | 进程 | `CmdPalLinks.exe` |
 | 用户数据 | `%LOCALAPPDATA%\Packages\CmdPalLinks_byt16r9dq2e2y\LocalState` |
 | 快照目录 | `%TEMP%\cmdpal-CmdPalLinks-userdata-snapshot` |
@@ -31,15 +31,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File shared\build\package.ps1 -Pl
 
 ## LocalState 期望内容
 
-安装 0.1.2.0 后实测有 8 个文件（恢复后 SHA256 应与安装前一致）：
+安装 0.1.3.0 后实测（恢复后 SHA256 应与安装前一致；`links-editor.html` 自 0.1.3.0 起不再解出到 LocalState）：
 
 | 文件 | 体积 | 说明 |
 | --- | --- | --- |
 | `links.json` | 3013 B | 条目数据，实测 `items=7` |
 | `links.json.bak` | 3014 B | 原子写回退副本 |
 | `settings.json` | 108 B | `showFullPath` / `layout` / `showSubtitle` / `showTags` |
-| `links-editor.html` | 58001 B | 表单模板资源，随包拷入 |
-| `icons\*.png` | 4 个 | 图标缓存 |
+| `icons\*.png` | 图标缓存 | 自绘图标按 `r2\|kind\|color\|emoji\|title` 哈希命名 |
 
 校验脚本（只读）：
 

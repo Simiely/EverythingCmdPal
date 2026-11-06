@@ -36,12 +36,6 @@ internal sealed class SettingsManager : JsonSettingsManager
         "关闭后不显示条目自带的标签",
         true);
 
-    private readonly ToggleSetting _showBulkAdd = new(
-        "showBulkAdd",
-        "显示「批量添加 / 批量编辑」",
-        "关闭后资料库列表末尾不再显示「批量添加」「批量编辑」；行内「更多」里的导入入口仍然保留",
-        true);
-
     private bool _loading;
 
     public SettingsManager()
@@ -52,7 +46,6 @@ internal sealed class SettingsManager : JsonSettingsManager
         Settings.Add(_showFullPath);
         Settings.Add(_showSubtitle);
         Settings.Add(_showTags);
-        Settings.Add(_showBulkAdd);
         Settings.SettingsChanged += (_, _) =>
         {
             if (!_loading)
@@ -71,8 +64,6 @@ internal sealed class SettingsManager : JsonSettingsManager
 
     public bool ShowTags => _showTags.Value;
 
-    public bool ShowBulkAdd => _showBulkAdd.Value;
-
     /// <summary>
     /// 磁盘读取延后到后台加载阶段，避免拖慢扩展命令注册。
     /// </summary>
@@ -88,6 +79,6 @@ internal sealed class SettingsManager : JsonSettingsManager
             _loading = false;
         }
 
-        HostLog.Info($"settings loaded: layout={Layout} showFullPath={ShowFullPath} showSubtitle={ShowSubtitle} showTags={ShowTags} showBulkAdd={ShowBulkAdd}");
+        HostLog.Info($"settings loaded: layout={Layout} showFullPath={ShowFullPath} showSubtitle={ShowSubtitle} showTags={ShowTags}");
     }
 }

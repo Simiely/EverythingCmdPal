@@ -90,6 +90,19 @@ if (-not $trusted) {
     Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile', '-Command', $cmd
 }
 
+# Copy-Item 把目录复制到“已存在的目录”时会再嵌一层同名目录，LocalState 会被污染成
+# LocalState\<快照名>\...。改为逐文件复制，目标保持相对路径。
+function Copy-Tree([string]$source, [string]$destination) {
+    New-Item -ItemType Directory -Force -Path $destination | Out-Null
+    Get-ChildItem $source -Recurse -File | ForEach-Object {
+        $relative = $_.FullName.Substring($source.Length).TrimStart('\')
+        $target = Join-Path $destination $relative
+        $parent = Split-Path $target -Parent
+        if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+        Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+    }
+}
+
 # --- 4. 用户数据快照（卸载会删除 LocalState，0x80073CFA 又救不回来） -------------
 Write-Step '4/9 Snapshot LocalState'
 $userData = Join-Path $env:LOCALAPPDATA ("Packages\{0}\LocalState" -f $meta.PackageFamilyName)
@@ -97,7 +110,7 @@ $snapshot = Join-Path $env:TEMP ("cmdpal-{0}-userdata-snapshot" -f $meta.Name)
 if (Test-Path $snapshot) { Remove-Item $snapshot -Recurse -Force }
 $hasData = Test-Path $userData
 if ($hasData) {
-    Copy-Item $userData $snapshot -Recurse -Force
+    Copy-Tree $userData $snapshot
     $before = Get-ChildItem $snapshot -Recurse -File | Sort-Object FullName
     Write-Host "snapshot: $($before.Count) file(s) -> $snapshot"
 } else {
@@ -110,6 +123,7 @@ function Get-Hashes([string]$dir) {
         [pscustomobject]@{ Path = $_.FullName.Substring($dir.Length); Sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash }
     }
 }
+
 
 # --- 5. 停宿主与扩展，等 2 秒并断言 -----------------------------------------------
 Write-Step '5/9 Stop host and extension'
@@ -139,7 +153,7 @@ Write-Host "installed: $($installed.Version) ($($installed.Status))"
 # --- 8. 恢复数据 + 校验 ----------------------------------------------------------
 Write-Step '8/9 Restore LocalState and verify'
 if ($hasData) {
-    Copy-Item $snapshot $userData -Recurse -Force
+    Copy-Tree $snapshot $userData
     $after = Get-Hashes $userData
     $before = Get-Hashes $snapshot
     $diff = Compare-Object $before $after -Property Path, Sha256

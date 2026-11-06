@@ -126,6 +126,8 @@ button,input,textarea{font-family:inherit;}
 .stat.dup b{color:var(--warn);}
 .stat.bad b{color:var(--danger);}
 .stat.title b{color:#64b5ff;}
+.stat.ok b{color:var(--ok);}
+.stat.off b{color:var(--text-3);}
 .statbar .hint{margin-left:auto;}
 
 /* ============ 批量粘贴面板 ============ */
@@ -170,10 +172,10 @@ button,input,textarea{font-family:inherit;}
 .grid-head,
 .row{
   display:grid;
-  grid-template-columns:28px 96px minmax(240px,2.2fr) minmax(130px,1.1fr) minmax(120px,.9fr) minmax(120px,.9fr) 84px 40px 100px;
+  grid-template-columns:28px 96px minmax(240px,2.2fr) minmax(130px,1.1fr) minmax(120px,.9fr) minmax(120px,.9fr) 108px 40px 100px;
   gap:8px;
   align-items:start;
-  min-width:1010px;
+  min-width:1034px;
 }
 .grid-head{
   position:sticky;
@@ -194,7 +196,7 @@ button,input,textarea{font-family:inherit;}
   border:1px solid var(--stroke-soft);
   border-top:0;
   border-radius:0 0 var(--r-md) var(--r-md);
-  min-width:1010px;
+  min-width:1034px;
 }
 .row{
   position:relative;
@@ -284,6 +286,21 @@ input.target-input.dup{border-color:#a5891c;}
 
 /* ============ Emoji / 颜色 ============ */
 .emoji-wrap{display:flex;align-items:center;gap:4px;}
+/* 行内图标预览：emoji 原样显示；色块/透明底显示首字；auto 网址叠加 favicon（失败自动退回首字） */
+.icon-prev{
+  position:relative;
+  width:26px;height:26px;
+  flex:0 0 26px;
+  border-radius:6px;
+  border:1px solid var(--stroke-soft);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:600;line-height:1;
+  overflow:hidden;
+  background:transparent;
+  color:var(--text-2);
+  user-select:none;
+}
+.icon-prev img{position:absolute;inset:4px;width:18px;height:18px;object-fit:contain;}
 .emoji-wrap input{
   width:40px;
   flex:1 1 auto;
@@ -545,7 +562,7 @@ kbd{
     <div class="logo">⇄</div>
     <div>
       <h1>链接 / 文件清单编辑器</h1>
-      <p class="sub">本地编辑 · 导出 CSV 供 CmdPal 插件导入 · 数据不离开本机</p>
+      <p class="sub">直接读写插件数据 · 也可独立导出 CSV · 数据不离开本机</p>
     </div>
   </div>
   <div class="bar-actions">
@@ -553,11 +570,13 @@ kbd{
     <button class="btn ghost" id="btnSample">示例数据</button>
     <button class="btn ghost" id="btnImport">导入 CSV</button>
     <input type="file" id="fileInput" accept=".csv,.txt,text/csv,text/plain" hidden>
-    <button class="btn primary" id="btnExport">导出 CSV</button>
+    <button class="btn" id="btnExport">导出 CSV</button>
+    <button class="btn primary" id="btnSave" disabled>保存到插件</button>
   </div>
 </header>
 
 <div class="statbar">
+  <span class="stat ok" id="statConn"><b id="connText">未连接</b></span>
   <span class="stat">共 <b id="statTotal">0</b> 条</span>
   <span class="stat dup"><b id="statDup">0</b> 重复</span>
   <span class="stat bad"><b id="statBad">0</b> 非法</span>
@@ -606,7 +625,7 @@ C:\Users\Public\Documents\报告.xlsx
 <!-- @@BODY-END@@ -->
 <script>
 /* ===== PURE-CORE-START（此区块为纯函数，可脱离 DOM 单测） ===== */
-const CSV_HEADER = ['type','target','title','alias','tags','emoji','color'];
+const CSV_HEADER = ['type','target','title','alias','tags','emoji','color','icon'];
 const TYPE_VALUES = ['url','file','folder'];
 
 /* CSV 解析：RFC4180 状态机，处理引号/引号内逗号换行/双引号转义/BOM/CRLF/CR；未加引号字段去掉首尾空白 */
@@ -659,7 +678,8 @@ function rowsFromCSV(text){
     };
     records.push({
       type: get('type'), target: get('target'), title: get('title'),
-      alias: get('alias'), tags: get('tags'), emoji: get('emoji'), color: get('color')
+      alias: get('alias'), tags: get('tags'), emoji: get('emoji'),
+      color: get('color'), icon: get('icon')
     });
   }
   return { records, hadHeader: start === 1 };
@@ -718,6 +738,16 @@ function normalizeColor(v){
   return /^#[0-9a-f]{6}$/i.test(s) ? s.toUpperCase() : '';
 }
 
+/* 与插件 CsvCodec 同一套图标规则：none→透明底；有底色→色块；有 emoji→emoji；都没有→auto */
+function deriveIconKind(emoji, color, fallback){
+  const raw = String(color == null ? '' : color).trim();
+  const hasEmoji = !!firstGrapheme(emoji);
+  if (/^none$/i.test(raw)) return hasEmoji ? 'emoji' : 'transparent';
+  if (normalizeColor(raw)) return hasEmoji ? 'emoji' : 'block';
+  if (hasEmoji) return 'emoji';
+  return fallback === 'transparent' ? 'transparent' : 'auto';
+}
+
 function firstGrapheme(v){
   const s = String(v == null ? '' : v).trim();
   if (!s) return '';
@@ -747,6 +777,25 @@ function inferTitle(row){
   }
   const base = t.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
   return base || t;
+}
+
+/* 行内图标预览模型：与插件渲染规则一致（block / 透明底 / emoji / auto） */
+function iconPreview(row){
+  const emoji = firstGrapheme(row.emoji);
+  const color = normalizeColor(row.color);
+  const kind = String(row.iconKind || 'auto');
+  const blocked = kind === 'block' || (kind !== 'transparent' && !!color);
+  const title = String(row.title || '').trim() || inferTitle(row);
+  const fallback = row.type === 'folder' ? 'D' : row.type === 'file' ? 'F' : 'W';
+  const letter = (firstGrapheme(title) || fallback).toUpperCase();
+  let favicon = '';
+  if (!emoji && !blocked && kind === 'auto'){
+    const target = String(row.target || '').trim();
+    if (/^https?:\/\//i.test(target)){
+      try{ favicon = new URL(target).origin + '/favicon.ico'; }catch(e){ favicon = ''; }
+    }
+  }
+  return { emoji, blocked, color, letter, favicon };
 }
 
 /* 校验全表：返回每行错误/警告/重复标记 + 汇总统计 */
@@ -843,7 +892,7 @@ function validateAll(rows){
   return { info, stats };
 }
 
-/* 导出记录归一化 */
+/* 导出记录归一化（transparent 沿用 CSV 约定的 none；icon 列保存形态，保证回导不丢图标） */
 function exportRecord(r){
   const inf = inferTypeFromTarget(r.target);
   return {
@@ -853,7 +902,8 @@ function exportRecord(r){
     alias: splitList(r.alias).join('|'),
     tags: splitList(r.tags).join('|'),
     emoji: firstGrapheme(r.emoji),
-    color: normalizeColor(r.color)
+    color: r.iconKind === 'transparent' ? 'none' : normalizeColor(r.color),
+    icon: ['auto','block','transparent','emoji'].includes(r.iconKind) ? r.iconKind : deriveIconKind(r.emoji, r.color, 'auto')
   };
 }
 
@@ -916,7 +966,9 @@ const state = { rows: [] };
 function newRow(patch){
   return Object.assign({
     id: 'r' + (++seq),
-    type: 'url', target: '', title: '', alias: '', tags: '', emoji: '', color: '', needConfirm: false
+    guid: '',
+    type: 'url', target: '', title: '', alias: '', tags: '', emoji: '', color: '',
+    iconKind: 'auto', needConfirm: false
   }, patch || {});
 }
 
@@ -946,6 +998,7 @@ function rowHTML(row){
   <div class="cell"><input type="text" data-field="tags" placeholder="工作|常用" autocomplete="off" aria-label="标签"></div>
   <div class="cell">
     <div class="emoji-wrap">
+      <span class="icon-prev" data-icon-preview aria-hidden="true"></span>
       <input type="text" data-field="emoji" maxlength="8" placeholder="🙂" autocomplete="off" aria-label="图标">
       <button type="button" class="mini-btn" data-act="emoji" tabindex="-1" title="选择常用图标">＋</button>
     </div>
@@ -966,6 +1019,19 @@ function rowHTML(row){
 
 function rowElById(id){
   return rowsEl.querySelector('[data-id="' + id + '"]');
+}
+
+function updateIconPreview(el, row){
+  const m = iconPreview(row);
+  const key = [m.emoji, m.blocked ? (m.color || 'default') : '', m.letter, m.favicon].join('|');
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.style.background = m.blocked ? (m.color || '#2563EB') : '';
+  el.style.color = m.blocked ? '#fff' : '';
+  el.title = m.emoji ? '图标：' + m.emoji
+    : m.favicon ? '自动图标（站点 favicon，失败退回首字）'
+    : '默认图标（首字' + (m.blocked ? '色块' : '') + '）';
+  el.innerHTML = esc(m.emoji || m.letter) + (m.favicon ? `<img src="${esc(m.favicon)}" alt="" onerror="this.remove()">` : '');
 }
 
 function syncField(row, field){
@@ -1031,6 +1097,9 @@ function refresh(){
     const colorBtn = el.querySelector('[data-act="color"]');
     colorBtn.title = !String(row.color || '').trim() ? '底色（透明）'
       : (nc ? '底色 ' + nc : '底色格式无效：' + row.color);
+
+    const prev = el.querySelector('[data-icon-preview]');
+    if (prev) updateIconPreview(prev, row);
   });
 
   $('#statTotal').textContent = v.stats.total;
@@ -1106,7 +1175,7 @@ function duplicateRow(id){
   const src = state.rows[i];
   const copy = newRow({
     type: src.type, target: src.target, title: src.title, alias: src.alias,
-    tags: src.tags, emoji: src.emoji, color: src.color, needConfirm: src.needConfirm
+    tags: src.tags, emoji: src.emoji, color: src.color, iconKind: src.iconKind, needConfirm: src.needConfirm
   });
   state.rows.splice(i + 1, 0, copy);
   render({ focusId: copy.id });
@@ -1131,6 +1200,9 @@ rowsEl.addEventListener('input', e => {
     if (g !== val){ inp.value = g; val = g; }
   }
   row[f] = val;
+  if (f === 'emoji'){
+    row.iconKind = deriveIconKind(val, row.color, row.iconKind);
+  }
   if (f === 'target') row.needConfirm = false;
   refresh();
 });
@@ -1256,11 +1328,13 @@ function openEmojiPicker(row, anchor){
     if (!b) return;
     if (b.dataset.popEmoji !== undefined){
       row.emoji = b.dataset.popEmoji;
+      row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
       syncField(row, 'emoji');
       closePop();
       refresh();
     } else if (b.dataset.pop === 'clear'){
       row.emoji = '';
+      row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
       syncField(row, 'emoji');
       closePop();
       refresh();
@@ -1270,6 +1344,7 @@ function openEmojiPicker(row, anchor){
 
 function applyColor(row, raw, close){
   row.color = String(raw == null ? '' : raw).trim();
+  row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
   if (close) closePop();
   refresh();
   if (row.color && !normalizeColor(row.color)) toast('底色需为 #RRGGBB，当前值已标记为非法', 'bad');
@@ -1372,7 +1447,10 @@ function applyImport(records, mode){
       alias: splitList(r.alias).join('|'),
       tags: splitList(r.tags).join('|'),
       emoji: firstGrapheme(r.emoji),
-      color: String(r.color || '').trim(),
+      color: normalizeColor(r.color),
+      iconKind: ['auto','block','transparent','emoji'].includes(String(r.icon || '').trim().toLowerCase())
+        ? String(r.icon).trim().toLowerCase()
+        : deriveIconKind(r.emoji, r.color, 'auto'),
       needConfirm: TYPE_VALUES.includes(rawType) ? false : inf.needConfirm
     });
   }).filter(r => !isBlankRow(r));
@@ -1522,14 +1600,16 @@ const SAMPLE_ROWS = [
 
 function loadSample(){
   const apply = () => {
-    state.rows = SAMPLE_ROWS.map(s => newRow(s));
+    state.rows = SAMPLE_ROWS.map(s => newRow(Object.assign({}, s, {
+      iconKind: deriveIconKind(s.emoji, s.color, 'auto')
+    })));
     render({ focusId: state.rows[0].id });
     toast('已载入 5 条示例数据', 'good');
   };
   if (state.rows.some(r => !isBlankRow(r))){
     showModal({
       title: '载入示例数据',
-      body: '<p>载入示例会替换当前编辑内容，未导出的改动将丢失。</p>',
+      body: '<p>载入示例会替换当前编辑内容，未保存的改动将丢失。若接着点「保存到插件」，会覆盖插件里的全部链接（仍会保留 links.json.bak 备份）。</p>',
       buttons: [
         { label: '取消', onClick: closeModal },
         { label: '载入示例', cls: 'primary', onClick: () => { closeModal(); apply(); } }
@@ -1547,18 +1627,28 @@ function showHelp(){
     body: `
       <div class="help-section">
         <h3>这个页面是什么</h3>
-        <p>单文件离线工具：批量录入网址与本地文件/目录，编辑完成后导出 CSV，供 CmdPal 插件导入。所有数据只在本机内存与浏览器下载中流转，不上传、不联网、无构建步骤，双击 HTML 即可使用。</p>
+        <p>单文件编辑器。从「链接库 → 批量编辑」打开时，页面会自动读取插件里的现有条目，点「保存到插件」即可整表写回 <code>links.json</code>（原子写 + <code>links.json.bak</code> 备份），无需导出再导入。直接双击 HTML 打开时退化为离线工具：可以编辑并导出 CSV，供插件「导入 CSV」使用。</p>
+      </div>
+      <div class="help-section">
+        <h3>保存到插件</h3>
+        <ul>
+          <li>页面由插件进程内的回环服务提供（只绑 <code>127.0.0.1</code>，端口随机，地址带一次性令牌）；闲置 20 分钟或插件进程退出后服务自动停止。</li>
+          <li>保存是「整表替换」：表格里的内容就是插件里的全部条目，删除行再保存会删除对应条目。</li>
+          <li>保存前会先做与行内提示相同的校验；有非法或重复行时不会写入，并列出具体行与原因。</li>
+          <li>写入失败会显示服务端返回的原因；数据未写入时插件里的条目保持不变。</li>
+        </ul>
       </div>
       <div class="help-section">
         <h3>CSV 表结构（导出严格按此顺序）</h3>
-        <p><code>type,target,title,alias,tags,emoji,color</code></p>
+        <p><code>type,target,title,alias,tags,emoji,color,icon</code></p>
         <ul>
           <li><code>type</code>：<code>url</code> / <code>file</code> / <code>folder</code></li>
           <li><code>target</code>：完整网址（含 http/https）或绝对路径（盘符 <code>D:\</code>、UNC <code>\\\\server\\share</code>、以 <code>/</code> 开头）</li>
           <li><code>title</code>：显示名称，可空；留空时插件可用 target 推断，行内灰色占位符即推断结果</li>
           <li><code>alias</code> / <code>tags</code>：可空，多个值用 <code>|</code> 分隔</li>
           <li><code>emoji</code>：单个 emoji，可空</li>
-          <li><code>color</code>：<code>#RRGGBB</code>，留空表示透明底</li>
+          <li><code>color</code>：<code>#RRGGBB</code> 色块、<code>none</code> 透明底、留空自动取图标</li>
+          <li><code>icon</code>：<code>auto</code> / <code>block</code> / <code>transparent</code> / <code>emoji</code>，原样保存图标形态；旧版 7 列文件（无此列）仍可导入，按 emoji 与 color 推断</li>
         </ul>
       </div>
       <div class="help-section">
@@ -1567,7 +1657,7 @@ function showHelp(){
           <li>点「新增一行」或在 target / 标题输入框按 <kbd>Enter</kbd>：提交当前行并新建下一行。</li>
           <li>在 target 输入框粘贴多行文本，会按行批量新增；也支持「标题<Tab>网址」两列，自动拆分标题。</li>
           <li>类型自动判定：<code>http/https</code> 开头为 url；盘符或 <code>\\\\</code> 开头按扩展名区分 file / folder；无扩展名按 folder 并标黄「需确认」。</li>
-          <li>Emoji 输入框只保留一个字符；旁边的「＋」打开常用图标板。底色按钮打开色板 / 自定义 hex / 透明。</li>
+          <li>Emoji 输入框只保留一个字符；左边的方块是当前图标预览：有 emoji 显示 emoji，有色块显示底色 + 首字，<code>auto</code> 网址尝试站点 favicon 并自动退回首字。旁边的「＋」打开常用图标板。底色按钮打开色板 / 自定义 hex / 透明。</li>
           <li>剪贴板或表格复制粘贴过来的空行、多余空白会被忽略。</li>
         </ul>
       </div>
@@ -1597,12 +1687,176 @@ function showHelp(){
   });
 }
 
+/* ===== 插件连接（同源回环 HTTP，令牌只留在内存） ===== */
+const API = { token: '', connected: false };
+
+function readTokenFromUrl(){
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token') || '';
+  if (token){
+    params.delete('token');
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+  }
+  return token;
+}
+
+async function apiRequest(path, options){
+  const headers = Object.assign({}, (options && options.headers) || {});
+  if (API.token) headers['X-CmdPalLinks-Token'] = API.token;
+  const res = await fetch(path, Object.assign({ cache: 'no-store' }, options || {}, { headers }));
+  let data = null;
+  try { data = await res.json(); } catch (e){ data = null; }
+  if (!res.ok || !data || data.ok !== true){
+    const message = (data && (data.error || data.message)) || ('HTTP ' + res.status);
+    throw new Error(message);
+  }
+  return data;
+}
+
+function setConnection(kind, text){
+  API.connected = kind === 'on';
+  const chip = $('#statConn');
+  const label = $('#connText');
+  if (chip) chip.className = 'stat ' + (kind === 'on' ? 'ok' : kind === 'error' ? 'bad' : 'off');
+  if (label) label.textContent = text;
+  const btn = $('#btnSave');
+  if (btn) btn.disabled = !API.connected;
+}
+
+function rowsFromItems(items){
+  return (items || []).map(it => {
+    const rawType = String(it.type || '').toLowerCase();
+    return newRow({
+      guid: it.id || '',
+      type: TYPE_VALUES.includes(rawType) ? rawType : 'url',
+      target: it.target || '',
+      title: it.title || '',
+      alias: it.alias || '',
+      tags: it.tags || '',
+      emoji: firstGrapheme(it.emoji),
+      color: normalizeColor(it.color),
+      iconKind: String(it.iconKind || 'auto'),
+      needConfirm: false
+    });
+  });
+}
+
+/* 拉取插件里的现有条目并重建表格；silent=true 时不弹提示（保存后自动同步用） */
+async function loadFromPlugin(opts){
+  const silent = !!(opts && opts.silent);
+  if (!API.token){
+    setConnection('off', '未连接插件');
+    return;
+  }
+  try{
+    const data = await apiRequest('/api/links');
+    const items = Array.isArray(data.items) ? data.items : [];
+    state.rows = rowsFromItems(items);
+    if (!state.rows.length) state.rows.push(newRow());
+    render({ focusId: items.length ? null : state.rows[0].id });
+    setConnection('on', '已连接插件');
+    if (!silent) toast('已读取 ' + items.length + ' 条现有数据', 'good');
+  }catch(err){
+    setConnection('error', '连接失败');
+    if (!silent) toast('读取现有数据失败：' + err.message, 'bad');
+  }
+}
+
+function buildSavePayload(){
+  return state.rows.filter(r => !isBlankRow(r)).map(r => ({
+    id: r.guid || '',
+    type: TYPE_VALUES.includes(r.type) ? r.type : inferTypeFromTarget(r.target).type,
+    target: String(r.target || '').trim(),
+    title: String(r.title || '').trim(),
+    alias: splitList(r.alias).join('|'),
+    tags: splitList(r.tags).join('|'),
+    emoji: firstGrapheme(r.emoji),
+    color: r.iconKind === 'transparent' ? '' : normalizeColor(r.color),
+    iconKind: r.iconKind || 'auto'
+  }));
+}
+
+function collectSaveProblems(){
+  const v = validateAll(state.rows);
+  const problems = [];
+  let no = 0;
+  state.rows.forEach(r => {
+    if (isBlankRow(r)) return;
+    no++;
+    const o = v.info[r.id];
+    const reasons = (o.errors || []).slice();
+    if (o.dup && o.dupReason) reasons.push(o.dupReason);
+    if (reasons.length){
+      problems.push({ index: no, target: r.target, reason: reasons.join('；') });
+    }
+  });
+  return problems;
+}
+
+async function doSave(){
+  closePop();
+  if (!API.connected){
+    toast('未连接插件：请从「链接库 → 批量编辑」打开本页', 'bad');
+    return;
+  }
+  const problems = collectSaveProblems();
+  if (problems.length){
+    showModal({
+      title: '无法保存',
+      body: `<p class="dup-note">以下 ${problems.length} 行需要先修正，保存已取消：</p>${skipListHTML(problems)}`,
+      buttons: [{ label: '知道了', cls: 'primary', onClick: closeModal }]
+    });
+    return;
+  }
+  const payload = buildSavePayload();
+  if (!payload.length){
+    showModal({
+      title: '保存空列表',
+      body: '<p>当前没有有效条目。继续保存会清空插件里的全部链接（会保留 links.json.bak 备份）。</p>',
+      buttons: [
+        { label: '取消', onClick: closeModal },
+        { label: '清空并保存', cls: 'primary', onClick: () => { closeModal(); sendSave(payload); } }
+      ]
+    });
+    return;
+  }
+  await sendSave(payload);
+}
+
+async function sendSave(payload){
+  const btn = $('#btnSave');
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  try{
+    const res = await apiRequest('/api/links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: payload })
+    });
+    toast('已保存 ' + res.saved + ' 条到插件（新增 ' + res.added + '、更新 ' + res.updated + '、删除 ' + res.removed + '）', 'good');
+    await loadFromPlugin({ silent: true });
+  }catch(err){
+    toast('保存失败：' + err.message, 'bad');
+    showModal({
+      title: '保存失败',
+      body: `<p>${esc(err.message)}</p><p class="hint">数据没有写入，插件里的条目保持不变。</p>`,
+      buttons: [{ label: '知道了', cls: 'primary', onClick: closeModal }]
+    });
+  }finally{
+    btn.disabled = !API.connected;
+    btn.textContent = old;
+  }
+}
+
 /* ===== 工具栏 ===== */
 $('#btnAdd').addEventListener('click', addRowBottom);
 
 $('#btnSample').addEventListener('click', loadSample);
 $('#btnHelp').addEventListener('click', showHelp);
 $('#btnExport').addEventListener('click', doExport);
+$('#btnSave').addEventListener('click', doSave);
 
 $('#btnPasteToggle').addEventListener('click', () => {
   const panel = $('#pastePanel');
@@ -1633,9 +1887,21 @@ document.addEventListener('keydown', e => {
 });
 
 /* ===== 启动 ===== */
-state.rows.push(newRow());
-render();
-focusCell(state.rows[0].id);
+(async function boot(){
+  API.token = readTokenFromUrl();
+  if (!API.token){
+    state.rows.push(newRow());
+    render();
+    setConnection('off', '未连接插件');
+    toast('未连接插件：可直接编辑并导出 CSV；要写入插件请从列表末项「批量编辑」打开', 'bad');
+    focusCell(state.rows[0].id);
+    return;
+  }
+  setConnection('off', '连接中…');
+  state.rows.push(newRow());
+  render();
+  await loadFromPlugin();
+})();
 </script>
 </body>
 </html>

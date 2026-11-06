@@ -374,8 +374,8 @@
 - **不可做**：CmdPal 首页/全局搜索固定第二。结论写入方案 §3.2。
 
 ### 10.4 批量导入/导出（M3.4）
-- CSV 表头严格：`type,target,title,alias,tags,emoji,color`；`alias/tags` 用 `|`；`color` 空=自动、`none`=透明、`#RRGGBB`=指定色（定稿见 §10.6）；`emoji` UTF-8 原样。
-- 解析容错：BOM 剥离、CRLF/CR/LF、RFC4180 引号/`""`、字段内逗号需引号、中文路径不转义、全字段 trim；非 UTF-8 直接拒绝（不静默 GBK）。
+- CSV 表头：`type,target,title,alias,tags,emoji,color,icon`（旧版 7 列无 `icon` 仍可导入）；`alias/tags` 用 `|`；`color` 空=自动、`none`=透明、`#RRGGBB`=指定色（定稿见 §10.6）；`icon`= `auto`/`block`/`transparent`/`emoji`；`emoji` UTF-8 原样。
+- 解析容错：BOM 剥离（文件与字符串路径都剥）、CRLF/CR/LF、RFC4180 引号/`""`、字段内逗号需引号、中文路径不转义、全字段 trim；非 UTF-8 直接拒绝（不静默 GBK）。
 - 触发：`IParametersPage` + `FilePickerParameterRun`（原生对话框）；**拖拽不支持**（IDL 无 drop API；`CommandItem.DataPackage` 是输出）；兜底为多行文本粘贴。
 - 流程：解析（后台，5000 行 <300ms，上限 10000 行/5MB，15s 超时）→ 预览（可导入/重复/非法 + 行号原因）→ 确认 → **单次** `SaveLocked`（新增 `ImportBatch`，禁止逐条 `Add`）。
 - 重复：`SameKey(kind, normalized target)`；默认跳过，可选覆盖（title/alias/tags/图标更新，alias/tags 合并，openCount/lastOpenedAt/createdAt/id 保留）。
@@ -407,9 +407,9 @@
 
 **实现映射（文件 → 作用）**
 - `Services/LibraryStore.cs`：`DedupeKey`（URL 小写 scheme/host、去默认端口、去末尾 `/`；路径绝对化 + 去尾分隔符 + 小写，不要求存在）、`ImportBatch`（单锁 + 单次原子写、写前快照、失败 `Load()` 回滚内存并保留快照）、`UndoLastImport`、`ExportJson`/`ExportCsv`、`WriteAtomic`（`.tmp` → `File.Replace`/`File.Move`）。
-- `Services/CsvCodec.cs`：严格表头 `type,target,title,alias,tags,emoji,color`；UTF-8 严格解码（含 BOM 剥离，非法字节直接报「不会按 GBK 猜测」）；RFC 4180 手写状态机（引号、`""`、字段内逗号/换行、CRLF/CR/LF）；`alias/tags` 以 `|` 分隔（无 `|` 时兼容中文逗号）；emoji 只取首个文本元素；行号级非法原因。
+- `Services/CsvCodec.cs`：表头 `type,target,title,alias,tags,emoji,color,icon`（兼容旧 7 列）；UTF-8 严格解码（含 BOM 剥离，非法字节直接报「不会按 GBK 猜测」）；RFC 4180 手写状态机（引号、`""`、字段内逗号/换行、CRLF/CR/LF）；`alias/tags` 以 `|` 分隔（无 `|` 时兼容中文逗号）；emoji 只取首个文本元素；行号级非法原因。
 - `Pages/ImportPage.cs`：`ParametersPage` + `FilePickerParameterRun`（宿主注入 HWND 后 `InitializeWithWindow`）；两段式状态机「解析预览 → 确认导入」；预览显示 可导入/重复/非法/警告 计数与前 20 条非法行号；确认后单次写盘；成功清空文件选择。
-- `Services/CustomIconRenderer.cs` + `Services/IconCache.cs`：64×64 自绘 PNG（圆角色块/透明底 + 单色字形），Light/Dark 两份，按 `kind|color|emoji|title` 哈希缓存。
+- `Services/CustomIconRenderer.cs` + `Services/IconCache.cs`：64×64 自绘 PNG（圆角色块/透明底 + 单色字形），Light/Dark 两份，按 `r2|kind|color|emoji|title` 哈希缓存；GDI P/Invoke 必须 `CharSet.Unicode`。
 - `Commands/ExportCommands.cs`：JSON / CSV 导出与「撤销上次导入」，导出目录 `LocalState/exports/links-{yyyyMMdd-HHmmss}.{json|csv}`，结果用 Toast 回显完整路径。
 
 **已实现的格式与往返**
