@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$cer = 'C:\Users\wandou\WorkBuddy\2026-10-25-23-07-56\EverythingCmdPal\package\dev.cer'
+$cer = Join-Path (Split-Path $PSScriptRoot -Parent) 'package\dev.cer'
 
 Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
 Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null

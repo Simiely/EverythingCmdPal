@@ -1,4 +1,4 @@
-# DEVELOPMENT.md
+# 开发说明（EverythingCmdPal）
 
 ## 项目概览
 

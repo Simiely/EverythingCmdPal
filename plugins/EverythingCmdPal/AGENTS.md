@@ -1,6 +1,7 @@
 # AGENTS.md · 项目规则
 
 > 📌 **文档基线**：2026-10-26 · 1.3.4 · 连接诊断空态 + 预览缓存上限 + 文件夹浏览页（parent:）
+> 本插件位于 `plugins/EverythingCmdPal/`；下文命令均在该目录下执行。仓库通用规则见根 `README.md` 与 `docs/`。
 > **更新文档/代码后，请更新此行**（日期 + 版本 + 摘要；commit hash 会自指本行，不写），并在 CHANGELOG 追加版本
 
 ## 技术栈
@@ -9,9 +10,9 @@
 - `net10.0-windows10.0.26100.0` + `WindowsSdkPackageVersion 10.0.26100.68-preview`
 - `Microsoft.CommandPalette.Extensions` **0.11.260520004**（Toolkit 同包）、`Shmuelie.WinRTServer` 2.1.1、`Microsoft.Windows.CsWinRT` 2.2.0、`Microsoft.Windows.SDK.BuildTools` 10.0.26100.4188（NuGet 自动，提供 makeappx/signtool）
 - 宿主：PowerToys **0.100.2**（CmdPal 0.11.11762）
-- Everything **1.5.0.1408a**，实例名 `1.5a`（`allow_ipc_pipe=1`），SDK 为 `src/EverythingCmdPal/native/Everything3.dll`
+- Everything **1.5.0.1408a**，实例名 `1.5a`（`allow_ipc_pipe=1`），SDK 为 `native/Everything3.dll`
 
-## 关键坑（详见 DEVELOPMENT.md 问题记录）
+## 关键坑（详见 docs/development.md 问题记录）
 
 - SDK3：一旦调用 `AddSearchPropertyRequest`，`GetResultFullPathNameW` 对所有条目返回 0 → 不请求属性，大小/时间用 `FileInfo`
 - 手工打包：manifest 的 `Language="x-generate"` 必须改成具体语言，否则 `0x80073CF6`
@@ -37,4 +38,4 @@
 
 ## 详细规则（按需 @引用）
 
-- @DEVELOPMENT.md（架构说明 + 问题记录）
+- @docs/development.md（架构说明 + 问题记录）

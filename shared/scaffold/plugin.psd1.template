@@ -1,0 +1,13 @@
+@{
+    Name              = '__NAME__'
+    DisplayName       = '__DISPLAY__'
+    Description       = '__DISPLAY__'
+    Manifest          = 'src/__NAME__/Package.appxmanifest'
+    Project           = 'src/__NAME__/__NAME__.csproj'
+    PackageFamilyName = '__NAME___xxxxxxxxxxx'   # 首次安装后从 Get-AppxPackage 取实际值
+    CertSubject       = 'CN=EverythingCmdPal Dev'
+    ProcessName       = '__NAME__'
+    HostProcessName   = 'Microsoft.CmdPal.UI'
+    HostMinimumVersion = '0.100.2'
+    TagPrefix         = '__LOWERNAME__-v'
+}

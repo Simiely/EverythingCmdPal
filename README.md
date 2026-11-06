@@ -1,59 +1,64 @@
-# EverythingCmdPal
+# Command Palette 插件集合
 
-PowerToys Command Palette 的 Everything 搜索扩展（基于官方 SDK3 / Everything 1.5）。
+本仓库收纳自研的 PowerToys Command Palette 扩展。每个插件是一个**自包含单元**：源码、MSIX 清单、构建脚本、文档、资产都在自己的目录里；跨插件通用的机制放在根 `docs/`，参数化脚本放在 `shared/build/`。
 
-## 功能
+基线：PowerToys `0.100.2` · CmdPal UI `0.11.11762.0` · SDK `Microsoft.CommandPalette.Extensions 0.11.260520004` · `net10.0-windows10.0.26100.0`。
 
-- **秒搜全盘**：Everything SDK3 官方 IPC，首屏 50 条、无限滚动加载，防抖去重
-- **预览**：图片大图（跟随详情栏宽度）、文本片段、其他格式 64px 缩略图；完整预览走 PowerToys Peek
-- **拖拽**：结果可直接拖到资源管理器 / 邮件 / 聊天窗口（StorageItems DataPackage）
-- **动作**：打开、打开所在文件夹、复制完整路径、用 Peek 预览、在 Everything 中打开当前搜索
-- **排序过滤条**：名称 / 路径 / 大小 / 修改时间 × 升/降序，8 种组合，切换即用服务端排序重搜，并记住选择
-- **详情栏开关**：`Ctrl+K` 右键「隐藏详细信息」进入纯列表（文件名占满整行）；纯列表页右键「显示详细信息」返回
-- **文件夹浏览**：文件夹结果 `Ctrl+K` → 浏览文件夹，列出直接子项（`parent:` 语法），搜索框变成文件夹内筛选
-- **设置**：详情栏宽度、预览图清晰度、每页条数、Everything 实例名、默认排序、输入即搜（fallback）
+## 插件索引
 
-## 安装 / 更新
+| 插件 | 一句话 | 当前版本 | 宿主最低版本 | 安装 | 排障 | 源码 | CHANGELOG |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [EverythingCmdPal](plugins/EverythingCmdPal/README.md) | 用 Everything 秒搜全盘文件 | `1.3.4` | `0.100.2` | [install.ps1](plugins/EverythingCmdPal/tools/install.ps1) / [update.cmd](plugins/EverythingCmdPal/tools/update.cmd) | [troubleshooting](docs/troubleshooting.md) | [src](plugins/EverythingCmdPal/src) | [CHANGELOG](plugins/EverythingCmdPal/CHANGELOG.md) |
+| [CmdPalLinks](plugins/CmdPalLinks/README.md) | 本地链接 / 文件 / 文件夹收藏与检索 | `0.1.2.0` | `0.100.2` | [install.ps1](plugins/CmdPalLinks/tools/install.ps1) | [install-notes](plugins/CmdPalLinks/docs/install-notes.md) | [src](plugins/CmdPalLinks/src) | [CHANGELOG](plugins/CmdPalLinks/CHANGELOG.md) |
 
-**新电脑（推荐）**：`git clone` 或 Download ZIP 解压 → 双击 `tools\update.cmd`
+## 按任务找入口
 
-脚本会自动完成：安装 .NET SDK 10（仅用户目录）→ 生成并信任开发证书（一次 UAC）→
-构建 → 打包签名 → 安装 → 启动。打包工具（makeappx/signtool）来自 NuGet 的
-`Microsoft.Windows.SDK.BuildTools` 包，无需手动下载。
+**我要装一个插件**
+1. 读 [docs/install.md](docs/install.md) 的 9 步流程与禁止项；
+2. 跑插件自己的薄封装：`plugins/<Plugin>/tools/install.ps1`（EverythingCmdPal 也可用 `tools\update.cmd`）；
+3. 装完按 [docs/install.md](docs/install.md) §5 做三层残留核对。
 
-**已有机器**：改完代码后同样双击 `tools\update.cmd` 即可（安全流程：关 CmdPal →
-卸载旧包 → 安装 → 重启，不会出现重复条目）。
+**装了不显示 / 重复 / 打不开**
+→ [docs/troubleshooting.md](docs/troubleshooting.md)：三层取证（包 / 持久缓存 / UIA 渲染）、错误码对照、SparseApp 异常说明。插件特有数值在各插件 `docs/install-notes.md`。
 
-**前提**：Windows 10/11 x64；本机需安装并运行 Everything 1.5+（扩展通过 IPC 连接）。
+**我要发版**
+→ [docs/release.md](docs/release.md)：tag `<plugin>-v<version>`、资产带版本号、每插件 `Identity Version` 独立递增。历史 tag `v1.3.4` 保留不动。
 
-## 开发
+**我要加新插件**
+1. 复制 `shared/scaffold/` 到 `plugins/<Name>/`，改 `plugin.psd1`、`Package.appxmanifest` 的 `Identity`；
+2. CLSID 三处必须一致（C# `[Guid]`、`com:Class Id`、`CreateInstance ClassId`）；
+3. 写 `README.md`、`CHANGELOG.md`；
+4. 在本文件「插件索引」加一行；
+5. 用 `shared/build/install.ps1 -Plugin <Name>` 首次安装（版本从 `0.1.0.0` 起）。
 
-```
-tools\build.ps1            # 编译 + 铺包
-tools\update.cmd           # 一键安全更新（推荐）
-tools\SelfTest             # SearchSession 分页/去重自测（dotnet run）
-tools\QueryTest            # SDK3 连通性独立验证
-```
-
-- 无 Visual Studio 依赖：.NET SDK 10 + NuGet（CsWinRT 的 winmd 指向 NuGet 包，见 csproj）
-- 无 Windows SDK 依赖（同上）
-
-## 已知限制
-
-- 详情栏宽度 = `Details.Size` 三档 + 窗口比例，宿主无拖拽分隔条
-- 公开 SDK（0.11/0.12）无 `Details.Content`，面板内不支持图片查看器（等 SDK 更新）
-- 切换页面后搜索框文字会被宿主清空：搜索框文本来自宿主侧页面状态，扩展只能在导航前给目标页设 `SearchText`；
-  且 `SearchText` 赋值会触发一次重搜、光标位置无法控制（详见 DEVELOPMENT.md 问题记录）
-- 一切需要 `Everything 1.5+` 正在运行（默认实例回退 `1.5a`）
-
-## 结构
+## 目录约定
 
 ```
-src/EverythingCmdPal/
-  Actions/      动作命令（打开/定位/复制/Peek/在 Everything 中打开/定位器）
-  Interop/      Everything3.dll P/Invoke（签名对齐官方 Everything3.h）
-  Items/        列表条目与条目上下文（ResultContext）
-  Pages/        结果页（调度 + UI 适配，分页在 SearchSession）
-  Services/     SearchSession / EverythingClient / ResultMetadata / PreviewService / SettingsManager / HostLog
-  Interop 之外均不直接触碰 P/Invoke
+.
+├─ README.md              # 本文件：插件索引 + 按任务找入口
+├─ docs/                  # 跨插件通用：install / troubleshooting / host-notes / release
+├─ shared/
+│  ├─ build/              # 参数化：package.ps1（构建+打包+签名）、install.ps1（零残留安装）
+│  └─ scaffold/           # 新插件脚手架（psd1 / manifest / csproj 模板）
+└─ plugins/<Name>/        # 一个插件一个目录，目录名 = MSIX Identity Name
+   ├─ README.md           # 固定 6 节：是什么 / 安装 / 使用 / 排障 / 开发 / 发版
+   ├─ CHANGELOG.md
+   ├─ plugin.psd1         # 插件常量：Manifest / Project / PFN / 证书 / 进程名 / TagPrefix
+   ├─ src/<Name>/         # csproj + Package.appxmanifest + 代码 + Assets
+   ├─ tests/              # 可选
+   ├─ tools/              # 插件专属脚本（瘦封装，逻辑在 shared/build/）
+   └─ docs/               # 插件文档：design.md / spec.md / tasks.md / self-test.md / install-notes.md
 ```
+
+命名约定：目录名 = MSIX `Identity Name` = csproj 名；文档固定名 `design.md`、`spec.md`、`tasks.md`、`self-test.md`、`install-notes.md`；脚本固定名 `tools/install.ps1`、`tools/gen-icons.py`。
+
+## 多插件共存规则
+
+- **隔离**：`Identity Name`、CLSID、`LocalState`、进程名各自独立；证书与 Publisher 可共享。
+- **版本**：每个插件独立递增，互不干扰；tag 一律带插件前缀。
+- **共享**：只有机制文档与构建脚本进 `shared/` 与根 `docs/`，插件代码不跨目录引用。
+- **禁止**：插件直接引用另一个插件的源码或 `LocalState`。
+
+## 不纳入版本库
+
+`.testdata/`（备份、日志、截图、历史安装包）、`package/`（layout 与 msix 产物）、`ref/`（上游参考 clone，含嵌套 `.git`）、`.screenshots/`、证书文件。详见 `.gitignore`。

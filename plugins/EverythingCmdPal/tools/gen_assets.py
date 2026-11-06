@@ -1,6 +1,6 @@
 import os, struct, zlib
 
-OUT = r"C:\Users\wandou\WorkBuddy\2026-10-25-23-07-56\EverythingCmdPal\src\EverythingCmdPal\Assets"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'EverythingCmdPal', 'Assets')
 BG = (28, 30, 34)
 FG = (122, 196, 255)
 

@@ -2,12 +2,29 @@
 bin/
 obj/
 
-# 打包产物与布局
+# 打包产物与布局（任意层级的 package/）
 package/
 
 # 下载的打包工具（makeappx/signtool 等，可由 NuGet 包重新解压）
-tools/buildtools/
-tools/sdkbuildtools/
+**/tools/buildtools/
+**/tools/sdkbuildtools/
+
+# 本地临时数据：备份、日志、截图、历史安装包（不进库）
+.testdata/
+.screenshots/
+test-open-me.*
+
+# 上游参考 clone（各自带 .git，绝不能纳入版本库）
+ref/
+
+# 证书与私钥
+*.pfx
+*.pvk
+*.cer
+*.key
+
+# 日志
+*.log
 
 # IDE
 .vs/
