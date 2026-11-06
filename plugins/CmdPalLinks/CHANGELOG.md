@@ -2,6 +2,18 @@
 
 格式：`<版本> · <日期>` + 变更点。版本与 `Package.appxmanifest` 的 `Identity Version` 一致。
 
+## 0.1.4.0 · 2026-11-06
+
+- 修复「切回默认图标不生效」：`LibraryStore.ReplaceAll` 与 CSV `icon` 列在显式 `iconKind=auto/transparent` 时
+  会强制清空残留的 `iconEmoji` / `iconColor`（此前非空 emoji 会把显式 `auto` 改回 `emoji`），
+  编辑器「应用默认图标」同时清空行内 emoji。测试：`StoreHarness editor` / `csv` 覆盖「kind=auto + 残留 emoji/底色」。
+- 编辑器图标改成两卡并列：`默认图标`（favicon / 色块首字 / 透明底）与 `自定义 emoji`，各自带「应用」按钮；
+  生效项显示「使用中」并高亮，保存把生效项持久化为 `iconKind`，重开编辑器保持选中态。
+- emoji 改为彩色：`Vortice.Direct2D1 3.8.3`（成熟 COM 封装）+ DirectWrite `EnableColorFont` + WIC 位图，
+  在独立子进程 `CmdPalLinks.exe --render-emoji` 内渲染成 PNG（`SetErrorMode` 抑制错误框），宿主只读 PNG；
+  无彩色字形/子进程失败/超时一律降级 GDI 单色轮廓。缓存 key 前缀改为 `r3|`，彩色产物落 `icons/color-*.png`。
+- 移除此前手写 D2D/DWrite 的裸 P/Invoke 探针（曾在用户机器上两次 `0xc0000005`），不再保留任何会弹系统错误框的可执行文件。
+
 ## 0.1.3.0 · 2026-11-06
 
 - 编辑器闭环：`批量编辑` 启动扩展进程内的回环 HTTP 服务（只绑 `127.0.0.1`、随机端口、一次性 token，不落盘/不写日志），

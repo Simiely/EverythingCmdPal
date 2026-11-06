@@ -387,6 +387,23 @@ internal static class CsvCodec
             if (IconKinds.IsValid(explicitKind))
             {
                 iconKind = explicitKind;
+
+                // icon 列是权威值：显式 auto/transparent 必须清掉 emoji 与底色，
+                // 否则「切回默认图标」在 CSV 往返后仍会被残留 emoji 覆盖。
+                if (iconKind == IconKinds.Auto || iconKind == IconKinds.Transparent)
+                {
+                    emoji = string.Empty;
+                    iconColor = string.Empty;
+                }
+                else if (iconKind == IconKinds.Block)
+                {
+                    emoji = string.Empty;
+                }
+                else if (emoji.Length == 0)
+                {
+                    iconKind = IconKinds.Auto;
+                    iconColor = string.Empty;
+                }
             }
             else if (explicitKind.Length > 0)
             {

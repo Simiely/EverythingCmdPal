@@ -2,6 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using CmdPalLinks.Services;
 using Microsoft.CommandPalette.Extensions;
 using Shmuelie.WinRTServer;
 using Shmuelie.WinRTServer.CsWinRT;
@@ -15,6 +16,13 @@ public class Program
     [MTAThread]
     public static void Main(string[] args)
     {
+        // 彩色 emoji 子进程入口：必须在 COM 服务注册之前分流，且不带任何窗口。
+        if (EmojiRenderHost.Handles(args))
+        {
+            Environment.Exit(EmojiRenderHost.Run(args));
+            return;
+        }
+
         if (args.Length > 0 && args[0] == "-RegisterProcessAsComServer")
         {
             global::Shmuelie.WinRTServer.ComServer server = new();

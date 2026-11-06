@@ -47,6 +47,8 @@ internal sealed class IconCache
     private readonly ConcurrentDictionary<string, bool> _missing = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _missingChecked = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, IconInfo?> _custom = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _colorInflight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _colorFailed = new(StringComparer.OrdinalIgnoreCase);
     private int _notifyPending;
 
     public IconCache()
@@ -133,12 +135,14 @@ internal sealed class IconCache
     }
 
     /// <summary>
-    /// 自绘图标（色块/透明底/emoji）：按 kind|color|emoji|title 哈希缓存，首次同步生成 light/dark 两份 PNG。
+    /// 自绘图标（色块/透明底/emoji）：按 kind|color|emoji|title 哈希缓存。
+    /// emoji 条目先用 GDI 单色轮廓同步出图（保证列表立刻有图标），
+    /// 同时在后台用独立子进程渲染彩色字形 PNG（<c>color-*.png</c>），成功后再替换并通知刷新。
     /// key 带渲染版本前缀：渲染实现变化后旧 PNG 不再命中，避免复用历史错误产物。
     /// </summary>
     private IconInfo GetCustom(LinkItem item)
     {
-        var key = "r2|" + string.Join(
+        var key = "r3|" + string.Join(
             '|',
             IconKinds.Normalize(item.IconKind),
             item.IconColor ?? string.Empty,
@@ -156,6 +160,18 @@ internal sealed class IconCache
             var stem = Stem(key);
             var lightPath = Path.Combine(_dir, "custom-" + stem + "-light.png");
             var darkPath = Path.Combine(_dir, "custom-" + stem + "-dark.png");
+            var colorPath = Path.Combine(_dir, "color-" + stem + ".png");
+
+            var emoji = (item.IconEmoji ?? string.Empty).Trim();
+            var useColor = emoji.Length > 0 && IconKinds.Normalize(item.IconKind) == IconKinds.Emoji;
+
+            if (useColor && File.Exists(colorPath))
+            {
+                var colorIcon = new IconInfo(new IconData(colorPath), new IconData(colorPath));
+                _custom[key] = colorIcon;
+                HostLog.Info($"color emoji loaded: kind={item.IconKind} emoji='{item.IconEmoji}'");
+                return colorIcon;
+            }
 
             if (!File.Exists(lightPath))
             {
@@ -169,7 +185,16 @@ internal sealed class IconCache
 
             var icon = new IconInfo(new IconData(lightPath), new IconData(darkPath));
             _custom[key] = icon;
-            HostLog.Info($"custom icon loaded: kind={item.IconKind} emoji='{item.IconEmoji}' color='{item.IconColor}'");
+
+            if (useColor)
+            {
+                ScheduleColor(key, item, colorPath);
+            }
+            else
+            {
+                HostLog.Info($"custom icon loaded: kind={item.IconKind} emoji='{item.IconEmoji}' color='{item.IconColor}'");
+            }
+
             return icon;
         }
         catch (Exception ex)
@@ -177,6 +202,49 @@ internal sealed class IconCache
             HostLog.Error($"custom icon failed: {ex.GetType().Name}: {ex.Message}");
             return Icons.ForKind(item.Kind);
         }
+    }
+
+    /// <summary>后台子进程渲染彩色 emoji；失败/无彩色字形时保持现有单色图标。</summary>
+    private void ScheduleColor(string key, LinkItem item, string colorPath)
+    {
+        if (_colorFailed.ContainsKey(key) || !_colorInflight.TryAdd(key, 0))
+        {
+            return;
+        }
+
+        var emoji = (item.IconEmoji ?? string.Empty).Trim();
+        // 与单色渲染一致：emoji 只有在显式 #RRGGBB 底色时才叠色块，none/留空为透明底。
+        CustomIconRenderer.ParseColor(item.IconColor, out var hasColor);
+        var block = hasColor && IconKinds.Normalize(item.IconKind) == IconKinds.Emoji;
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var png = EmojiRenderClient.Render(emoji, item.IconColor, block, colorPath + ".tmp");
+                if (png is null)
+                {
+                    _colorFailed.TryAdd(key, 0);
+                    HostLog.Info($"color emoji fallback: mono outline emoji='{emoji}' (no color glyph or child render failed)");
+                    return;
+                }
+
+                WriteCustom(colorPath, png);
+                var icon = new IconInfo(new IconData(colorPath), new IconData(colorPath));
+                _custom[key] = icon;
+                HostLog.Info($"color emoji rendered: emoji='{emoji}' bytes={png.Length}");
+                NotifyChanged();
+            }
+            catch (Exception ex)
+            {
+                _colorFailed.TryAdd(key, 0);
+                HostLog.Error($"color emoji background failed: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                _colorInflight.TryRemove(key, out _);
+            }
+        });
     }
 
     private static void WriteCustom(string path, byte[] bytes)

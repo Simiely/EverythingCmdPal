@@ -20,6 +20,8 @@
 
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <!-- 彩色 emoji 渲染用 Vortice 的 WIC CopyPixels 指针签名。 -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsSdkPackageVersion>10.0.26100.68-preview</WindowsSdkPackageVersion>
     <!-- 没有安装 Windows SDK：直接把 NuGet 里的 winmd 目录喂给 CsWinRT -->
     <CsWinRTWindowsMetadata>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref\$(WindowsSdkPackageVersion)\winmd</CsWinRTWindowsMetadata>
@@ -31,6 +33,7 @@
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4188" />
     <PackageReference Include="Shmuelie.WinRTServer" Version="2.1.1" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.8.3" />
   </ItemGroup>
 
   <ItemGroup>

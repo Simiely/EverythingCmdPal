@@ -645,10 +645,9 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
   （例如 `📁` → `0x003F 0x003F`），`DrawTextW` 再把它们当成 `U+3F3F` 等汉字绘制，于是图标显示为乱码字形。
   这也是中文标题首字色块显示异常的原因。修复：两个 P/Invoke 都加 `CharSet = CharSet.Unicode`；
   自绘缓存 key 增加 `r2|` 前缀，避免复用历史错误 PNG。
-- **彩色 emoji 限制与降级**：宿主基线 PowerToys 0.100.2 + `Microsoft.CommandPalette.Extensions` 0.11.260520004，
-  自绘走 GDI/GDI+，只能得到 emoji 的单色字形轮廓（COLR 彩色字形不参与，实测 `📁` / `🛠️` / `🚀` 均为单色可辨轮廓）。
-  可用降级：字形无墨迹（不支持的组合）→ 首字；`block` / 有底色 → 底色块 + 白字；需要彩色 emoji 时只能改走
-  宿主字形（当前版本未采用，避免非 BMP 字形在宿主侧被 <1em 判定为路径）。
+- **彩色 emoji 限制与降级（0.1.3.0）**：0.1.3.0 的自绘走 GDI/GDI+，只能得到 emoji 的单色字形轮廓
+  （COLR 彩色字形不参与，实测 `📁` / `🛠️` / `🚀` 均为单色可辨轮廓）。降级：字形无墨迹（不支持的组合）→ 首字；
+  `block` / 有底色 → 底色块 + 白字。彩色字形方案见 §10.8。
 - **CSV / 编辑器字段**：`links.json` 的 `iconKind` / `iconColor` / `iconEmoji` ↔ CSV 第 8 列 `icon` ↔ 编辑器行模型；
   `LibraryStore.ReplaceAll` 不再把 `block` + 空底色降级成 `auto`。
 
@@ -658,6 +657,33 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
   请求校验 `Host` 头 + `X-CmdPalLinks-Token`（定长比较）；`GET /` 返回同源编辑器 HTML，`GET/POST /api/links` 读写；
   5MB 请求体上限、15s 请求超时、20 分钟空闲超时，扩展 `Dispose` 时关闭；异常只记 method/path/status，不记端口与 token。
 - 保存复用 `LibraryStore.ReplaceAll`（`lock (_gate)` + `SaveLocked` 原子写 + `.bak`），成功触发 `Changed` 让列表失效重读。
+- **切回默认图标**：显式 `iconKind`（`auto` / `block` / `transparent` / `emoji`）是权威值，
+  `ReplaceAll` 与 CSV 的 `icon` 列在 `auto` / `transparent` 时必须清空残留 `iconEmoji` / `iconColor`；
+  编辑器两卡各带「应用」按钮，点「默认图标 → 应用」会同时清空行内 emoji。
+
+### 10.8 彩色 emoji（0.1.4.0）
+
+背景：0.1.4.0 尝试过手写 D2D/DWrite 的裸 P/Invoke 探针，两次在用户机器上以 `0xc0000005` 崩溃并弹出系统错误框
+（第一次 `CreateBitmap` 用错 vtable 槽位把宽度当指针解引用；第二次修正 `+3` 后 `CreateSolidColorBrush` / `DrawText`
+槽位仍对不上）。裸 COM 的访问冲突无法被 `try/catch` 捕获，会直接带走扩展进程，因此改为下面的路线。
+
+- **渲染栈**：`Vortice.Direct2D1 3.8.3`（SharpGen 生成的成熟 COM 封装，不自己数 vtable，也没有手写结构体布局），
+  用 `DWriteCreateFactory` + `CreateTextFormat("Segoe UI Emoji")` + `CreateWicBitmapRenderTarget`，
+  `DrawTextLayout(..., DrawTextOptions.EnableColorFont | NoSnap)` 取 COLR/CPAL 彩色字形，`IWICBitmap.CopyPixels` 读回像素。
+- **进程隔离**：真正渲染发生在 `CmdPalLinks.exe --render-emoji <base64emoji> <color|-> <0|1> <out.png>` 子进程里，
+  宿主只通过 `EmojiRenderClient` 拉起它并读取 64px PNG（`IconInfo(IconData(path), IconData(path))`）。
+  子进程首行 `SetErrorMode(FAILCRITICALERRORS|NOGPFAULTERRORBOX|NOOPENFILEERRORBOX)`，不弹任何窗口/错误框；
+  所有异常只写 `<out>.err` 并用退出码表达。最坏情况是子进程退出，CmdPal 扩展进程不受影响。
+- **宿主不阻塞**：emoji 条目先同步走 GDI 单色轮廓（列表立刻有图标），彩色 PNG 由后台子进程补齐，
+  成功写 `icons/color-<stem>.png` 并 `NotifyChanged` 让列表刷新；缓存 key 前缀 `r3|`，旧 `r2|` 产物不再命中。
+- **降级判定（实际表现）**：
+  1. 子进程渲染完成后统计不透明像素中 RGB 通道最大差 ≥ 24 的数量，少于 8 个即判定「没有彩色字形」
+     （字体缺 COLR/CPAL 或回退到非彩色字体时整条 emoji 只有一种颜色，spread=0）→ 返回 `null`；
+  2. 子进程超时（6s）、非 0 退出、PNG 无效或文件缺失 → 返回 `null`；
+  3. 上述任一情况都保持 GDI 单色轮廓（`CustomIconRenderer`），`block`/有底色时仍是底色块 + 白色单色字形，
+     不支持的组合退回首字；同一 key 失败后不再反复拉起子进程。
+- **实测**：`🚀` 透明底输出 64×64、620 种颜色、RGB 最大差 215；`📁` + `#2563EB` 底色块角内像素
+  `(37,99,235)`、中心 `(255,216,87)`，证明底色与彩色字形合成正确。宿主/环境无彩色字形时只能单色，判定条件同上。
 
 ---
 

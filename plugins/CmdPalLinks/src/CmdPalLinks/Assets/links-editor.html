@@ -172,10 +172,10 @@ button,input,textarea{font-family:inherit;}
 .grid-head,
 .row{
   display:grid;
-  grid-template-columns:28px 96px minmax(240px,2.2fr) minmax(130px,1.1fr) minmax(120px,.9fr) minmax(120px,.9fr) 108px 40px 100px;
+  grid-template-columns:28px 96px minmax(240px,2.2fr) minmax(130px,1.1fr) minmax(120px,.9fr) minmax(110px,.8fr) 244px 100px;
   gap:8px;
   align-items:start;
-  min-width:1034px;
+  min-width:1150px;
 }
 .grid-head{
   position:sticky;
@@ -196,7 +196,7 @@ button,input,textarea{font-family:inherit;}
   border:1px solid var(--stroke-soft);
   border-top:0;
   border-radius:0 0 var(--r-md) var(--r-md);
-  min-width:1034px;
+  min-width:1150px;
 }
 .row{
   position:relative;
@@ -284,8 +284,7 @@ input.target-input.dup{border-color:#a5891c;}
 .seg button.on[data-type=folder]{color:#ff9f0a;background:rgba(255,159,10,.15);}
 .seg button[tabindex="-1"]{pointer-events:auto;}
 
-/* ============ Emoji / 颜色 ============ */
-.emoji-wrap{display:flex;align-items:center;gap:4px;}
+/* ============ 图标选项（默认 / emoji） ============ */
 /* 行内图标预览：emoji 原样显示；色块/透明底显示首字；auto 网址叠加 favicon（失败自动退回首字） */
 .icon-prev{
   position:relative;
@@ -301,13 +300,36 @@ input.target-input.dup{border-color:#a5891c;}
   user-select:none;
 }
 .icon-prev img{position:absolute;inset:4px;width:18px;height:18px;object-fit:contain;}
-.emoji-wrap input{
-  width:40px;
-  flex:1 1 auto;
-  padding:0;
-  text-align:center;
-  font-size:15px;
+.icon-opts{display:flex;gap:6px;align-items:stretch;}
+.icon-opt{
+  flex:1 1 0;min-width:0;
+  display:flex;flex-direction:column;gap:3px;
+  padding:3px 4px 4px;
+  border:1px solid var(--stroke-soft);
+  border-radius:var(--r-sm);
+  background:var(--surface-2);
+  transition:border-color .12s,background .12s;
 }
+.icon-opt.on{border-color:var(--accent);background:var(--accent-soft);}
+.opt-head{display:flex;align-items:center;gap:3px;min-width:0;}
+.opt-name{font-size:10px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.icon-opt.on .opt-name{color:#8ecbff;}
+.opt-head .icon-prev{width:20px;height:20px;flex:0 0 20px;border-radius:5px;font-size:13px;}
+.opt-head .icon-prev img{inset:3px;width:14px;height:14px;}
+.opt-head input{width:100%;min-width:0;flex:1 1 auto;padding:0;text-align:center;font-size:14px;}
+.opt-head .color-btn{width:20px;height:20px;padding:1px;flex:0 0 20px;}
+.opt-head .mini-btn{width:20px;height:20px;font-size:11px;flex:0 0 20px;}
+.opt-apply{
+  height:17px;padding:0 6px;
+  border:1px solid var(--stroke-soft);border-radius:4px;
+  background:var(--surface-3);color:var(--text-3);
+  font-size:10px;line-height:15px;cursor:pointer;
+  white-space:nowrap;
+}
+.opt-apply:hover{background:var(--surface-4);color:var(--text);}
+.opt-apply[disabled]{cursor:default;opacity:1;}
+.icon-opt.on .opt-apply{background:var(--accent);border-color:var(--accent);color:#fff;cursor:default;}
+.icon-opt.on .opt-apply:hover{background:var(--accent);color:#fff;}
 .mini-btn{
   width:var(--h-sm);
   height:var(--h-sm);
@@ -322,7 +344,6 @@ input.target-input.dup{border-color:#a5891c;}
   transition:background .12s,border-color .12s;
 }
 .mini-btn:hover{background:var(--surface-4);border-color:#4a4a4f;color:var(--text);}
-.color-wrap{display:flex;align-items:center;gap:4px;}
 .color-btn{
   width:var(--h-sm);
   height:var(--h-sm);
@@ -607,8 +628,7 @@ C:\Users\Public\Documents\报告.xlsx
     <span>标题</span>
     <span>别名（| 分隔）</span>
     <span>标签（| 分隔）</span>
-    <span>图标</span>
-    <span>底色</span>
+    <span>图标（默认 / 自定义 emoji）</span>
     <span>操作</span>
   </div>
   <div id="rows"></div>
@@ -997,15 +1017,23 @@ function rowHTML(row){
   <div class="cell"><input type="text" data-field="alias" placeholder="gh|github" autocomplete="off" aria-label="别名"></div>
   <div class="cell"><input type="text" data-field="tags" placeholder="工作|常用" autocomplete="off" aria-label="标签"></div>
   <div class="cell">
-    <div class="emoji-wrap">
-      <span class="icon-prev" data-icon-preview aria-hidden="true"></span>
-      <input type="text" data-field="emoji" maxlength="8" placeholder="🙂" autocomplete="off" aria-label="图标">
-      <button type="button" class="mini-btn" data-act="emoji" tabindex="-1" title="选择常用图标">＋</button>
-    </div>
-  </div>
-  <div class="cell">
-    <div class="color-wrap">
-      <button type="button" class="color-btn" data-act="color" title="选择底色"><span class="swatch" data-swatch></span></button>
+    <div class="icon-opts">
+      <div class="icon-opt" data-opt="default">
+        <div class="opt-head">
+          <span class="icon-prev" data-icon-preview-default aria-hidden="true"></span>
+          <span class="opt-name">默认图标</span>
+          <button type="button" class="color-btn" data-act="color" title="选择默认图标的底色"><span class="swatch" data-swatch></span></button>
+        </div>
+        <button type="button" class="opt-apply" data-act="apply-default">应用</button>
+      </div>
+      <div class="icon-opt" data-opt="emoji">
+        <div class="opt-head">
+          <span class="icon-prev" data-icon-preview-emoji aria-hidden="true"></span>
+          <input type="text" data-field="emoji" maxlength="8" placeholder="🙂" autocomplete="off" aria-label="自定义 emoji">
+          <button type="button" class="mini-btn" data-act="emoji" tabindex="-1" title="选择常用图标">＋</button>
+        </div>
+        <button type="button" class="opt-apply" data-act="apply-emoji">应用</button>
+      </div>
     </div>
   </div>
   <div class="row-actions">
@@ -1021,8 +1049,23 @@ function rowElById(id){
   return rowsEl.querySelector('[data-id="' + id + '"]');
 }
 
-function updateIconPreview(el, row){
-  const m = iconPreview(row);
+/* 默认图标卡的形态由底色决定：留空=auto（favicon / 系统图标），none=透明底，颜色=色块首字 */
+function defaultIconKind(row){
+  const raw = String(row.color == null ? '' : row.color).trim();
+  if (/^none$/i.test(raw)) return 'transparent';
+  return normalizeColor(raw) ? 'block' : 'auto';
+}
+
+function iconPreviewDefault(row){
+  const kind = defaultIconKind(row);
+  return iconPreview(Object.assign({}, row, { emoji: '', iconKind: kind, color: kind === 'block' ? row.color : '' }));
+}
+
+function iconPreviewEmoji(row){
+  return iconPreview(Object.assign({}, row, { iconKind: 'emoji' }));
+}
+
+function updateIconPreview(el, m){
   const key = [m.emoji, m.blocked ? (m.color || 'default') : '', m.letter, m.favicon].join('|');
   if (el.dataset.key === key) return;
   el.dataset.key = key;
@@ -1095,11 +1138,24 @@ function refresh(){
       sw.style.backgroundSize = '';
     }
     const colorBtn = el.querySelector('[data-act="color"]');
-    colorBtn.title = !String(row.color || '').trim() ? '底色（透明）'
+    colorBtn.title = /^none$/i.test(String(row.color || '').trim()) ? '底色（透明）'
+      : !String(row.color || '').trim() ? '底色（自动图标）'
       : (nc ? '底色 ' + nc : '底色格式无效：' + row.color);
 
-    const prev = el.querySelector('[data-icon-preview]');
-    if (prev) updateIconPreview(prev, row);
+    const prevDefault = el.querySelector('[data-icon-preview-default]');
+    const prevEmoji = el.querySelector('[data-icon-preview-emoji]');
+    if (prevDefault) updateIconPreview(prevDefault, iconPreviewDefault(row));
+    if (prevEmoji) updateIconPreview(prevEmoji, iconPreviewEmoji(row));
+
+    const isEmoji = row.iconKind === 'emoji';
+    const defOpt = el.querySelector('[data-opt="default"]');
+    const emojiOpt = el.querySelector('[data-opt="emoji"]');
+    if (defOpt) defOpt.classList.toggle('on', !isEmoji);
+    if (emojiOpt) emojiOpt.classList.toggle('on', isEmoji);
+    const defBtn = el.querySelector('[data-act="apply-default"]');
+    const emojiBtn = el.querySelector('[data-act="apply-emoji"]');
+    if (defBtn){ defBtn.textContent = isEmoji ? '应用' : '使用中'; defBtn.disabled = !isEmoji; }
+    if (emojiBtn){ emojiBtn.textContent = isEmoji ? '使用中' : '应用'; emojiBtn.disabled = isEmoji; }
   });
 
   $('#statTotal').textContent = v.stats.total;
@@ -1200,9 +1256,6 @@ rowsEl.addEventListener('input', e => {
     if (g !== val){ inp.value = g; val = g; }
   }
   row[f] = val;
-  if (f === 'emoji'){
-    row.iconKind = deriveIconKind(val, row.color, row.iconKind);
-  }
   if (f === 'target') row.needConfirm = false;
   refresh();
 });
@@ -1229,6 +1282,20 @@ rowsEl.addEventListener('click', e => {
     openEmojiPicker(row, btn);
   } else if (act === 'color'){
     openColorPicker(row, btn);
+  } else if (act === 'apply-default'){
+    // 切回默认图标：明确把生效项设为 auto/block/transparent（由底色决定），并清掉 emoji。
+    row.iconKind = defaultIconKind(row);
+    row.emoji = '';
+    syncField(row, 'emoji');
+    refresh();
+  } else if (act === 'apply-emoji'){
+    const em = firstGrapheme(row.emoji);
+    if (!em){
+      toast('请先在 emoji 输入框里输入一个图标，再点「应用」', 'bad');
+      return;
+    }
+    row.iconKind = 'emoji';
+    refresh();
   }
 });
 
@@ -1328,13 +1395,11 @@ function openEmojiPicker(row, anchor){
     if (!b) return;
     if (b.dataset.popEmoji !== undefined){
       row.emoji = b.dataset.popEmoji;
-      row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
       syncField(row, 'emoji');
       closePop();
       refresh();
     } else if (b.dataset.pop === 'clear'){
       row.emoji = '';
-      row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
       syncField(row, 'emoji');
       closePop();
       refresh();
@@ -1344,10 +1409,14 @@ function openEmojiPicker(row, anchor){
 
 function applyColor(row, raw, close){
   row.color = String(raw == null ? '' : raw).trim();
-  row.iconKind = deriveIconKind(row.emoji, row.color, row.iconKind);
+  // 默认图标卡片的形态由底色决定；emoji 生效时底色只是 emoji 的背景。
+  if (row.iconKind !== 'emoji'){
+    row.iconKind = defaultIconKind(row);
+  }
   if (close) closePop();
   refresh();
-  if (row.color && !normalizeColor(row.color)) toast('底色需为 #RRGGBB，当前值已标记为非法', 'bad');
+  const nc = normalizeColor(row.color);
+  if (row.color && !/^none$/i.test(row.color) && !nc) toast('底色需为 #RRGGBB 或 none，当前值已标记为非法', 'bad');
 }
 
 function openColorPicker(row, anchor){
@@ -1357,14 +1426,14 @@ function openColorPicker(row, anchor){
     <div class="pop-title">图标底色</div>
     <div class="color-grid">
       ${COLORS.map(c => `<button type="button" data-pop-color="${c}" title="${c}" style="background:${c}" class="${cur === c ? 'on' : ''}"></button>`).join('')}
-      <button type="button" data-pop-color="" title="透明" style="${checker}" class="${!cur ? 'on' : ''}"></button>
+      <button type="button" data-pop-color="none" title="透明底" style="${checker}" class="${/^none$/i.test(row.color) ? 'on' : ''}"></button>
     </div>
     <div class="color-row">
-      <input type="text" data-pop="hex" class="mono" placeholder="#0A84FF" maxlength="9" value="${esc(row.color || '')}">
+      <input type="text" data-pop="hex" class="mono" placeholder="#0A84FF" maxlength="9" value="${esc(row.color && !/^none$/i.test(row.color) ? row.color : '')}">
       <button type="button" class="btn small" data-pop="apply">应用</button>
     </div>
     <div class="pop-foot">
-      <span class="hint">留空 = 透明底</span>
+      <span class="hint">留空 = 自动图标（favicon / 系统图标）</span>
       <button type="button" class="btn ghost small" data-pop="clear">清除</button>
     </div>`;
   const p = openPop(anchor, html);

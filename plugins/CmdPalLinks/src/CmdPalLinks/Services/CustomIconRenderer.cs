@@ -74,7 +74,7 @@ internal static class CustomIconRenderer
         return item.Kind == LinkKinds.Url ? "W" : "?";
     }
 
-    private static (int R, int G, int B) ParseColor(string? value, out bool valid)
+    internal static (int R, int G, int B) ParseColor(string? value, out bool valid)
     {
         valid = false;
         var text = (value ?? string.Empty).Trim();
@@ -242,7 +242,7 @@ internal static class CustomIconRenderer
         return pixels;
     }
 
-    private static bool InsideRoundedRect(int x, int y, int canvas, double radius, double inner)
+    internal static bool InsideRoundedRect(int x, int y, int canvas, double radius, double inner)
     {
         if (x < 0 || y < 0 || x >= canvas || y >= canvas)
         {
@@ -258,7 +258,7 @@ internal static class CustomIconRenderer
         return (dx * dx) + (dy * dy) <= radius * radius;
     }
 
-    private static byte[] Downsample(byte[] source, int canvas, int size)
+    internal static byte[] Downsample(byte[] source, int canvas, int size)
     {
         var result = new byte[size * size * 4];
         var factor = canvas / size;

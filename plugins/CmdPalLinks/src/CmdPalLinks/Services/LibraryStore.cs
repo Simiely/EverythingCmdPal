@@ -547,11 +547,13 @@ internal sealed class LibraryStore
 
             var emoji = FirstTextElement(source.IconEmoji);
             var colorText = (source.IconColor ?? string.Empty).Trim();
-            var iconKind = IconKinds.Normalize(source.IconKind);
+            var rawKind = (source.IconKind ?? string.Empty).Trim().ToLowerInvariant();
+            var explicitKind = IconKinds.IsValid(rawKind);
+            var iconKind = explicitKind ? rawKind : IconKinds.Auto;
+            var transparentColor = string.Equals(colorText, "none", StringComparison.OrdinalIgnoreCase);
 
-            if (string.Equals(colorText, "none", StringComparison.OrdinalIgnoreCase))
+            if (transparentColor)
             {
-                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Transparent;
                 colorText = string.Empty;
             }
             else if (colorText.Length > 0)
@@ -562,12 +564,43 @@ internal sealed class LibraryStore
                 }
 
                 colorText = colorText.ToUpperInvariant();
-                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Block;
             }
-            else if (iconKind != IconKinds.Transparent && iconKind != IconKinds.Block)
+
+            if (explicitKind)
             {
-                // 色块可以没有显式底色（渲染时用默认色），不能在这里被降级成 auto 丢掉。
-                iconKind = emoji.Length > 0 ? IconKinds.Emoji : IconKinds.Auto;
+                // 显式 iconKind 优先：编辑器里选「默认图标」时必须把残留的 emoji / 底色清掉，
+                // 否则 auto 会被下面的推断逻辑改回 emoji，表现为「切回默认不生效」。
+                switch (iconKind)
+                {
+                    case IconKinds.Auto:
+                    case IconKinds.Transparent:
+                        emoji = string.Empty;
+                        colorText = string.Empty;
+                        break;
+                    case IconKinds.Block:
+                        emoji = string.Empty;
+                        break;
+                    case IconKinds.Emoji:
+                        if (emoji.Length == 0)
+                        {
+                            iconKind = IconKinds.Auto;
+                            colorText = string.Empty;
+                        }
+
+                        break;
+                }
+            }
+            else if (emoji.Length > 0)
+            {
+                iconKind = IconKinds.Emoji;
+            }
+            else if (colorText.Length > 0)
+            {
+                iconKind = IconKinds.Block;
+            }
+            else
+            {
+                iconKind = transparentColor ? IconKinds.Transparent : IconKinds.Auto;
             }
 
             var item = new LinkItem

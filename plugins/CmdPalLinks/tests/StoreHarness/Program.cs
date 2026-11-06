@@ -259,6 +259,21 @@ internal static class Program
             var blockKept = blockItem.IconKind == "block" && string.IsNullOrEmpty(blockItem.IconColor) && string.IsNullOrEmpty(blockItem.IconEmoji);
             Console.WriteLine($"block without color: kind='{blockItem.IconKind}' kept={blockKept}");
 
+            // 切回默认图标：请求里可能还残留上一手 emoji/底色，显式 iconKind=auto 必须清空它们，
+            // 否则渲染时按残留 emoji 出图，用户看到的就是「保存到默认图标不会被替换」。
+            var autoItems = items.ToArray();
+            autoItems[targetIndex] = autoItems[targetIndex] with { Emoji = "📁", Color = "#2563EB", IconKind = "auto" };
+            Post(http, endpoint, token, autoItems);
+            var afterAuto = new LibraryStore(path);
+            afterAuto.Load();
+            var autoItem = afterAuto.Items.First(item => item.Id == editedId);
+            var autoCleared = autoItem.IconKind == "auto"
+                && string.IsNullOrEmpty(autoItem.IconEmoji)
+                && string.IsNullOrEmpty(autoItem.IconColor);
+            var autoOthersKept = before.Where(old => old.Id != editedId).All(old =>
+                afterAuto.Items.Any(item => item.Id == old.Id && item.Kind == old.Kind && item.IconEmoji == old.Emoji && item.IconColor == old.Color && item.Title == old.Title));
+            Console.WriteLine($"auto clears emoji: kind='{autoItem.IconKind}' emoji='{autoItem.IconEmoji}' color='{autoItem.IconColor}' cleared={autoCleared} others kept={autoOthersKept}");
+
             Post(http, endpoint, token, items.ToArray());
             var final = new LibraryStore(path);
             final.Load();
@@ -276,6 +291,8 @@ internal static class Program
                 && editStored
                 && othersKept
                 && blockKept
+                && autoCleared
+                && autoOthersKept
                 && finalOk;
             Console.WriteLine(ok ? "editor round-trip PASS" : "editor round-trip FAIL");
             return ok ? 0 : 1;
@@ -338,7 +355,19 @@ internal static class Program
             && legacyItem.IconKind == "emoji" && legacyItem.IconEmoji == "📁" && string.IsNullOrEmpty(legacyItem.IconColor);
         Console.WriteLine($"legacy 7-col import: ok={legacyOk} fatal={legacyParsed.FatalError}");
 
-        var ok = iconsRoundTrip && legacyOk;
+        // icon 列是权威值：即使 emoji/底色列还有残留，icon=auto 也必须把它们清掉（切回默认图标）。
+        var autoCsv = "type,target,title,alias,tags,emoji,color,icon\r\nurl,https://f.example.com/,F,,,\U0001F4C1,#2563EB,auto\r\n";
+        var autoPath = Path.Combine(Path.GetDirectoryName(path)!, "csv-auto", "links.json");
+        DeleteStoreFiles(autoPath);
+        var autoStore = new LibraryStore(autoPath);
+        autoStore.Load();
+        var autoParsed = CsvCodec.ParseCsv(autoCsv, "auto.csv", autoStore);
+        var autoCsvItem = autoParsed.Preview?.Addable.FirstOrDefault()?.Item;
+        var autoCsvOk = autoParsed.FatalError is null && autoCsvItem is not null
+            && autoCsvItem.IconKind == "auto" && string.IsNullOrEmpty(autoCsvItem.IconEmoji) && string.IsNullOrEmpty(autoCsvItem.IconColor);
+        Console.WriteLine($"csv icon=auto clears emoji: ok={autoCsvOk} fatal={autoParsed.FatalError}");
+
+        var ok = iconsRoundTrip && legacyOk && autoCsvOk;
         Console.WriteLine(ok ? "csv round-trip PASS" : "csv round-trip FAIL");
         return ok ? 0 : 1;
     }

@@ -53,10 +53,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File plugins/CmdPalLinks/tools/in
 7. **批量编辑（0.1.3.0）**：列表末项只有「批量编辑」。点击后浏览器应打开 `http://127.0.0.1:<随机端口>/?token=...`，
    页面统计条显示「已连接」与现有条数（当前 7），每行左侧有图标预览（emoji / 色块首字 / favicon）。
    改内容后点「保存到插件」→ 提示成功并刷新 id；`LocalState\links.json` 立即更新且生成 `.bak`。失败会弹窗显示服务端原因。
-8. **emoji 图标**：给任一条设置 emoji（如 `📁`）→ 保存 → 列表/搜索/详情应显示清晰单色轮廓（不是汉字乱码、不是方框）。
-   中文标题的首字色块也应显示正确汉字。彩色 emoji 目前为单色轮廓（GDI 限制，见 `design.md` §10.6）。
-9. **CSV 往返图标**：导出 CSV（8 列，末列 `icon`）→ 删除/清空后回导 → 各条 `iconKind/iconColor/iconEmoji` 不变；
-   旧版 7 列 CSV 仍可导入（按 emoji + color 推断形态）。
+8. **emoji 图标（0.1.4.0）**：给任一条设置 emoji（如 `📁` / `🚀`）→ 点「应用」→ 保存 → 列表/搜索/详情应显示彩色 emoji；
+   首次可能先显示单色轮廓，后台子进程完成后自动刷新为彩色。若 `LocalState\icons\` 里只有 `custom-*.png` 而无
+   `color-*.png`，说明环境没有彩色字形（判定条件见 `design.md` §10.8），此时保持单色轮廓且不弹任何错误框。
+9. **切回默认图标（0.1.4.0）**：把上面那条从 emoji 点「默认图标 → 应用」并保存 → `links.json` 中该条
+   `iconKind=auto`、`iconEmoji=""`、`iconColor=""`，列表恢复 favicon / 色块 / 透明底；其它条目图标不变。
+   重新打开编辑器，选中态仍在「默认图标」卡。
+10. **CSV 往返图标**：导出 CSV（8 列，末列 `icon`）→ 删除/清空后回导 → 各条 `iconKind/iconColor/iconEmoji` 不变；
+    旧版 7 列 CSV 仍可导入（按 emoji + color 推断形态）。
+11. **emoji 渲染不打扰**：`CmdPalLinks.exe --render-emoji ...` 子进程异常时只写 `<out>.png.err`，任何情况下不弹系统错误框。
 
 ## 5. 日志
 ```
