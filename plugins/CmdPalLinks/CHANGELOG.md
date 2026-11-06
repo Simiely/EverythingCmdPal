@@ -2,6 +2,16 @@
 
 格式：`<版本> · <日期>` + 变更点。版本与 `Package.appxmanifest` 的 `Identity Version` 一致。
 
+## 0.1.5.0 · 2026-11-06
+
+- 修复首页出现两条「链接库」：宿主的登记顺序是「先调 `TopLevelCommands()`、后把返回项 append 到顶层列表」，
+  而扩展在启动加载完成时调用 `RaiseItemsChanged()`，宿主随即走 `UpdateCommandsForProvider` 抢在 append 之前
+  插入一份新的 `TopLevelViewModel`，随后 append 又追加上登记时的那一份，最终同一 provider 出现两行。
+  现在 `TopLevelCommands()` 首调用内同步等待存储加载并写好副标题（`共 N 条`），全程不再触发 provider 级
+  `RaiseItemsChanged`（副标题靠 `INotifyPropChanged` 刷新）。顺带避免每次编辑条目都重建顶层项、
+  `TopLevelViewModel.Id`（由标题+副标题派生）变化导致已绑定快捷键失效。
+- 实测：`0.1.4.0` 首页 5 条命令（含 2 条「链接库」）→ `0.1.5.0` 4 条（「链接库」1 条）。
+
 ## 0.1.4.0 · 2026-11-06
 
 - 修复「切回默认图标不生效」：`LibraryStore.ReplaceAll` 与 CSV `icon` 列在显式 `iconKind=auto/transparent` 时

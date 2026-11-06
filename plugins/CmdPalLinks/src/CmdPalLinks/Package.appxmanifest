@@ -11,7 +11,7 @@
   <Identity
     Name="CmdPalLinks"
     Publisher="CN=EverythingCmdPal Dev"
-    Version="0.1.4.0" />
+    Version="0.1.5.0" />
 
   <Properties>
     <DisplayName>链接库</DisplayName>

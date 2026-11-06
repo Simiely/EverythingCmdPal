@@ -10,7 +10,7 @@
 | MSIX Identity Name | `CmdPalLinks` |
 | PackageFamilyName | `CmdPalLinks_byt16r9dq2e2y` |
 | Publisher | `CN=EverythingCmdPal Dev`（与 EverythingCmdPal 共用开发证书） |
-| 当前版本 | `0.1.4.0` |
+| 当前版本 | `0.1.5.0` |
 | 进程 | `CmdPalLinks.exe` |
 | 用户数据 | `%LOCALAPPDATA%\Packages\CmdPalLinks_byt16r9dq2e2y\LocalState` |
 | 快照目录 | `%TEMP%\cmdpal-CmdPalLinks-userdata-snapshot` |

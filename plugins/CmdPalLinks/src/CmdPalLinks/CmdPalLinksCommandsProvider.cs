@@ -54,8 +54,10 @@ public partial class CmdPalLinksCommandsProvider : CommandProvider
 
     private void OnLibraryChanged()
     {
+        // 只更新副标题，不 RaiseItemsChanged：宿主收到 ItemsChanged 会重建整份顶层命令
+        // （TopLevelViewModel.Id 由 Title/Subtitle 派生），新增/编辑条目后 Id 变化会让
+        // 已绑定的快捷键失效；副标题本身通过 INotifyPropChanged 就能即时刷新。
         _libraryCommand.Subtitle = CountText();
-        RaiseItemsChanged();
     }
 
     public override ICommandItem[] TopLevelCommands()
@@ -64,6 +66,15 @@ public partial class CmdPalLinksCommandsProvider : CommandProvider
         if (!_loaded)
         {
             _loaded = true;
+
+            // 副标题必须在宿主首次登记命令时就已是最终值：
+            // 宿主 TopLevelViewModel.Id = hash(ProviderId + 标题 + 副标题)，登记后再改副标题会换 Id。
+            // 同时这里不能再 RaiseItemsChanged：宿主登记路径是「先 TopLevelCommands()、后 Add」，
+            // 启动期触发 ItemsChanged 会让 UpdateCommandsForProvider 抢在 Add 之前插入一份新实例，
+            // 随后 Add 又追加旧实例，首页就出现两条「链接库」。
+            _store.WaitForLoad();
+            _libraryCommand.Subtitle = CountText();
+
             _ = LoadInBackground();
         }
 
@@ -93,7 +104,5 @@ public partial class CmdPalLinksCommandsProvider : CommandProvider
         }
 
         _itemsPage.Refresh();
-        _libraryCommand.Subtitle = CountText();
-        RaiseItemsChanged();
     }
 }
