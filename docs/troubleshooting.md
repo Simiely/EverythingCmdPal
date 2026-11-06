@@ -7,7 +7,7 @@
 | 症状 | 先确认 | 常见原因 |
 | --- | --- | --- |
 | 首页看不到插件 | `Get-AppxPackage <Name>` 是否有 1 条且 `Status: Ok` | 没装成功、包被卸载、宿主没重启 |
-| 首页出现两条同名条目 | 包数 / 持久缓存条数 / UIA 条数（见 §2） | 面板运行中安装、`-ForceUpdateFromAnyVersion` 残留、会话内重复注册 |
+| 首页出现两条同名条目 | 包数 / 持久缓存条数 / UIA 条数 / 日志时序（见 §2） | 面板运行中安装、`-ForceUpdateFromAnyVersion` 残留、会话内重复注册、扩展启动期 `RaiseItemsChanged()` 抢跑登记 |
 | 条目在但点了没反应 | 扩展进程是否在跑；`Log_*.log` 有无异常 | 扩展进程启动失败、数据文件损坏 |
 | 列表空白 / 一直加载 | `GetItems()` 是否抛异常；数据文件是否可解析 | `GetItems()` 里做了重活、JSON 损坏 |
 | 安装报错 | 错误码（见 §4） | 版本没递增、文件被占用、证书不受信任 |
@@ -60,12 +60,32 @@ $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond) |
     ForEach-Object { $_.Current.Name }
 ```
 
+注意：分组头也是一个 `ListItem`（高度 28，名称「命令」），统计插件条数时按名称过滤，别把总数当命令数。
+
+### 层 4：日志时序（区分「宿主重载」与「扩展抢跑」）
+
+```powershell
+$log = "$env:LOCALAPPDATA\Microsoft\PowerToys\CmdPal\Logs\0.100.2.0\Log_$(Get-Date -f yyyy-MM-dd).log"
+Select-String -Path $log -Pattern 'TopLevelCommands called|Loaded \d+ command\(s\) and 0 band\(s\) from .*CmdPalLinks|Started extension CmdPalLinks' |
+  Select-Object -Last 30 | ForEach-Object { $_.Line }
+```
+
+| 日志形态 | 判定 |
+| --- | --- |
+| 同一会话 `loaded=False` → `loaded=True`，`Loaded 1 command(s) from CmdPalLinks` 只有一次 | 扩展启动期 `RaiseItemsChanged()` 抢在宿主 append 之前插入新实例（0.1.5.0 已修） |
+| 短时间多次 `Started extension …` + 多次 `Loaded …` | 宿主整轮重载（SparseApp 异常放大），见 §5 |
+| 每会话只 1 次 `Started` / 1 次 `Loaded 1 command(s)`，但仍显示 2 条 | 已发生的历史重复，完整重启面板即可；若重启后重现，回到层 1 |
+
+时序型重复的机制、可复现条件与 Id 连带约束见 [install.md](install.md) §9.10。
+
 ## 3. 重复条目的处理
 
 1. **不要只重启扩展宿主**。停 `Microsoft.CmdPal.UI` 与插件进程，重新打开面板。
 2. 仍重复 → 按 [install.md](install.md) §1 走一遍完整安装（不要 `-ForceUpdateFromAnyVersion`）。
 3. 缓存层有已卸载扩展的残留键（`settings.json` 的 `ProviderSettings`）→ 关面板，**只删该扩展前缀的键**，
    不要整文件删除；参考 `plugins/EverythingCmdPal/tools/clean_cmdpal_settings.py`。
+4. 上面都干净、日志却仍是 `loaded=False` → `loaded=True` 两次调用 → 属扩展代码问题（启动期 `RaiseItemsChanged()`
+   抢在宿主 append 之前，见 [install.md](install.md) §9.10），重启治不了；升级到 CmdPalLinks 0.1.5.0 及以后。
 
 ## 4. 错误码对照
 

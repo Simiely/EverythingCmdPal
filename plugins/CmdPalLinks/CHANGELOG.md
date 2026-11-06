@@ -11,6 +11,8 @@
   `RaiseItemsChanged`（副标题靠 `INotifyPropChanged` 刷新）。顺带避免每次编辑条目都重建顶层项、
   `TopLevelViewModel.Id`（由标题+副标题派生）变化导致已绑定快捷键失效。
 - 实测：`0.1.4.0` 首页 5 条命令（含 2 条「链接库」）→ `0.1.5.0` 4 条（「链接库」1 条）。
+- 文档：时序根因、日志特征与 Id 连带约束写入 `docs/install.md` §9.10 / §9.11、`docs/troubleshooting.md` §2 层 4、
+  `docs/host-notes.md` §3.1 与 §4、本插件 `docs/design.md` §10.9。
 
 ## 0.1.4.0 · 2026-11-06
 

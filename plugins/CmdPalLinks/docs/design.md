@@ -648,8 +648,11 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
 - **彩色 emoji 限制与降级（0.1.3.0）**：0.1.3.0 的自绘走 GDI/GDI+，只能得到 emoji 的单色字形轮廓
   （COLR 彩色字形不参与，实测 `📁` / `🛠️` / `🚀` 均为单色可辨轮廓）。降级：字形无墨迹（不支持的组合）→ 首字；
   `block` / 有底色 → 底色块 + 白字。彩色字形方案见 §10.8。
-- **CSV / 编辑器字段**：`links.json` 的 `iconKind` / `iconColor` / `iconEmoji` ↔ CSV 第 8 列 `icon` ↔ 编辑器行模型；
-  `LibraryStore.ReplaceAll` 不再把 `block` + 空底色降级成 `auto`。
+- **CSV / 编辑器字段**：`links.json` 的 `iconKind` / `iconColor` / `iconEmoji` ↔ CSV 第 8 列 `icon` ↔ 编辑器行模型。
+  覆盖规则：**显式 `iconKind` 优先**；写入 `auto` / `transparent` 时必须同时清空 `iconEmoji` 与 `iconColor`，
+  CSV 同一列同理；`block` + 空底色不再降级成 `auto`。
+  反例（0.1.4.0 修过的坑）：旧逻辑在 `iconKind=auto` 但 `iconEmoji` 非空时把 kind 反写成 `emoji`，
+  用户点「切回默认图标 → 应用」后 emoji 还在，表现为"设置不生效"。
 
 ### 10.7 编辑器闭环（2026-11-06）
 
@@ -684,6 +687,34 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
      不支持的组合退回首字；同一 key 失败后不再反复拉起子进程。
 - **实测**：`🚀` 透明底输出 64×64、620 种颜色、RGB 最大差 215；`📁` + `#2563EB` 底色块角内像素
   `(37,99,235)`、中心 `(255,216,87)`，证明底色与彩色字形合成正确。宿主/环境无彩色字形时只能单色，判定条件同上。
+- **探针污染的教训**：`emoji-color-probe.exe` / `d2d-slot-probe.exe` 曾在用户机器上弹
+  `Exception Processing Message 0xc0000005 - Unexpected parameters`。此后规则写死：本机原生渲染探针只允许
+  **手动触发**、结果**写文件**（`.png` / `.err` / 退出码），进程先 `SetErrorMode`，绝不弹窗；
+  任何可能弹系统错误框的 exe 都不留在仓库与用户机器上。生产路径同理：渲染放子进程，宿主只读 PNG。
+
+### 10.9 顶层命令登记时序与首页重复条目（0.1.5.0）
+
+宿主 0.11.11762 的登记顺序（`TopLevelCommandManager.cs` / `CommandProviderWrapper.cs`）：
+
+1. `TryLoadCommandsAsync` → `LoadTopLevelCommandsFromProvider` → 扩展 `TopLevelCommands()`（**先取数组**）；
+2. 所有 provider 的加载任务完成后，`RegisterAndLoadCommandsAsync` 才把数组里的项 `TopLevelCommands.Add()`（**后 Add**）。
+
+`CommandsChanged`（扩展 `RaiseItemsChanged()`）走 `UpdateCommandsForProvider`：按 `CommandProviderId`
+`RemoveAll` + `InsertRange`，本身不会重复。但 0.1.4.0 在启动加载完成时就 `RaiseItemsChanged()`，
+此时第 2 步还没执行、顶层列表是空的 → `UpdateCommandsForProvider` 直接插入一份**新建**的 `TopLevelViewModel`；
+随后第 2 步又 append 掉登记时那份 → 同一 provider 两行「链接库」。日志特征就是同一会话出现两次
+`provider: TopLevelCommands called, loaded=False` → `loaded=True`，而 `Loaded 1 command(s) from CmdPalLinks` 只有一次。
+
+连带约束：`TopLevelViewModel.Id` 是 `CommandProviderId + DisplayTitle + Title + Subtitle` 的 WyHash64
+（`GenerateId()` 只在 `InitializeProperties` 与 `Command`/`IsInitialized` 变化时重算，之后改副标题不重算）。
+因此：①副标题必须在首次 `TopLevelCommands()` 返回前写定（否则登记后写副标题会换 Id）；
+②编辑条目触发的 provider 级 `RaiseItemsChanged` 会重建顶层项，`Id` 随 `共 N 条` 变化，
+已绑定的 `CommandHotkeys`（`…!CmdPalLinks<hash>`）随之失效。
+
+0.1.5.0 的做法：首次 `TopLevelCommands()` 内同步 `_store.WaitForLoad()` 并写定副标题；
+启动路径与 `_store.Changed` 都不再 `RaiseItemsChanged`（副标题靠 `INotifyPropChanged` 刷新）。
+实测：首页 ListItem 6 项（分组头 1 + 命令 5，含 2 条「链接库」）→ 5 项（分组头 1 + 命令 4，1 条），
+`Win + Ctrl + Z` 仍在。
 
 ---
 

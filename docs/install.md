@@ -168,10 +168,13 @@ Start-Process 'explorer.exe' 'shell:AppsFolder\Microsoft.CommandPalette_8wekyb3d
 ### 9.4 首页重复条目 ≠ 装了两个包
 
 - `Get-AppxPackage` 只有 1 条、持久存储里也只有 1 条 Provider 记录；两条 UI 条目共用同一个
-  `CommandId` 与同一个热键 —— **宿主会话内重复注册/重复渲染**。
+  `CommandId` 与同一个热键 —— **宿主会话内重复注册/重复渲染**，不是包并存。
 - 放大因素：`SparseApp` 启动抛 `System.ArgumentException: You forgot to start the extension…` 时，历史环境
   会把全部扩展整轮重载（29 秒内 7 次），重复条目随之出现。
-- 干净安装 + **完整重启 CmdPal**（不是只重启扩展宿主）后，重复条目消失。
+- 另一类与时序有关、可被扩展侧一次性修掉的成因见 §9.10（0.1.5.0 已修复）；两类在 UIA 上都表现为
+  「同一名称出现两次」，所以取证顺序固定为：**包层 → 缓存层 → UIA 条数 → 日志时序**（§9.6）。
+- 干净安装 + **完整重启 CmdPal**（不是只重启扩展宿主）能清掉已发生的重复；若日志里仍是
+  `loaded=False` → `loaded=True` 两次 `TopLevelCommands`，说明扩展还在启动期抢跑，属代码问题，重启治不了。
 
 ### 9.5 进程、等待与禁止项
 
@@ -208,3 +211,39 @@ Start-Process 'explorer.exe' 'shell:AppsFolder\Microsoft.CommandPalette_8wekyb3d
 1. 装前：版本已递增、`plugin.psd1` 的 PFN 与实际一致、快照目录可写。
 2. 装后：`Status: Ok`、`LocalState` 哈希一致、缓存/设置各 1 条、首页 1 条。
 3. 出问题先看日志 `…\PowerToys\CmdPal\Logs\<版本>\Log_*.log`，再按 §9.6 三层取证；不要先卸载。
+
+### 9.10 启动期 `RaiseItemsChanged()` 抢跑登记 → 同一 provider 两行（0.1.5.0）
+
+**宿主时序**（0.11.11762，`TopLevelCommandManager.cs`）：
+
+1. `TryLoadCommandsAsync` → `LoadTopLevelCommandsFromProvider` → 扩展 `TopLevelCommands()`，**先把数组取走**；
+2. 等所有 provider 加载任务完成后，`RegisterAndLoadCommandsAsync` 才逐个 `TopLevelCommands.Add()`。
+
+`CommandsChanged`（扩展 `RaiseItemsChanged()`）→ `UpdateCommandsForProvider`：按 `CommandProviderId`
+`RemoveAll` + `InsertRange`，**本身不会重复**。但如果扩展在启动加载完成时就 raise，此刻第 2 步还没跑、
+顶层列表是空的 → 宿主直接插入一份**新建**的 `TopLevelViewModel`；随后第 2 步又 append 掉登记时那份，
+同一 provider 就有了两行。
+
+- **可复现条件**：扩展首次 `TopLevelCommands()` 返回后、宿主 append 之前触发 provider 级
+  `RaiseItemsChanged()`（启动加载 30ms 量级完成时即触发）。
+- **日志特征**：同一会话两次 `provider: TopLevelCommands called, loaded=False` → `loaded=True`，
+  而 `Loaded 1 command(s) and 0 band(s) from CmdPalLinks …` 只有一次；
+  包层/缓存层各只有 1 条（区别于真多包）。
+- **排查顺序**：`Get-AppxPackage` 条数 → `commandProviderCache.json` / `ProviderSettings` 条数 →
+  UIA 首页 `ListItem` 计数 → 日志时序。前三层都是 1，只有 UI 是 2，再对上日志两次 `TopLevelCommands`，
+  即可判定为时序型重复。
+- **清理命令**：已发生的重复只能靠完整重启面板清掉（`Stop-Process Microsoft.CmdPal.UI`，再重开）；
+  要根治必须改扩展（0.1.5.0：首次 `TopLevelCommands()` 内同步 `WaitForLoad()` 并写定副标题，
+  启动与 `_store.Changed` 都不再 `RaiseItemsChanged`）。
+- **Id 连带约束**：`TopLevelViewModel.Id = WyHash64(ProviderId + DisplayTitle + Title + Subtitle)`，
+  只在 `InitializeProperties` / `Command` / `IsInitialized` 变化时重算。所以副标题要在首次返回前写定；
+  否则重建顶层项会让 Id 随 `共 N 条` 变化，已绑定的 `CommandHotkeys` 失效。
+- **本轮实测**：0.1.4.0 首页 ListItem 6 项 = 1 分组头 + 5 命令（2 条「链接库」）；
+  0.1.5.0 5 项 = 1 分组头 + 4 命令（1 条「链接库」，`共 7 条` + `Win + Ctrl + Z` 仍在）。
+
+### 9.11 0.1.5.0 安装记录（本轮补记）
+
+- 版本递增：`0.1.4.0 → 0.1.5.0`（`Package.appxmanifest` 的 `<Identity Version>`，构建前手工改好，装时用 `-NoBump`）。
+- 卸载会删 `LocalState` 的规则不变（见 §9.1）：脚本快照 **17 个文件** → 卸载 `0.1.4.0` →
+  安装 `0.1.5.0`（`Status: Ok`）→ 逐文件恢复 → **SHA256 all match** → `packages=1 providerCacheRefs=1`。
+- 装后只读核对：`links.json` 仍 7 条 / `schema=2`，两条 emoji（🧩、🖥️）与其余 `auto` 条目字段未变。
