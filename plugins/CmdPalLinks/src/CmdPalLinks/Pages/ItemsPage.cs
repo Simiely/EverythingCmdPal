@@ -158,7 +158,10 @@ internal sealed partial class ItemsPage : DynamicListPage
         }
 
         var outcome = SearchEngine.Search(EnsureIndex(), _query, int.MaxValue, int.MaxValue);
-        _results = outcome.Items;
+        // 根视图（无检索词）只列未分类条目；文件夹单独成行，条目在子列表里看。
+        _results = string.IsNullOrWhiteSpace(_query)
+            ? outcome.Items.Where(item => string.IsNullOrWhiteSpace(item.Folder)).ToArray()
+            : outcome.Items;
         _indexedCount = outcome.IndexedCount;
         _tookMs = outcome.ElapsedMs;
         // 实测宿主 0.11.11762 从不回调 LoadMore（无「加载更多」哨兵，realized 恒等于返回条数），
@@ -173,42 +176,43 @@ internal sealed partial class ItemsPage : DynamicListPage
         var rows = new List<IListItem>(count);
         missingCount = 0;
 
+        // 根视图先在顶部列出顶层文件夹（如「网页链接」）；子文件夹在各自的子页里展示。
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            foreach (var (name, folderCount) in _store.TopFolderCounts())
+            {
+                rows.Add(new ListItem(new FolderItemsPage(_store, _settings, _icons, _importPage, name))
+                {
+                    Title = LibraryStore.FolderLeaf(name),
+                    Subtitle = folderCount == 0 ? "空文件夹" : $"{folderCount} 条",
+                    Icon = Icons.FolderRow,
+                    MoreCommands = BuildFolderCommands(_store, name),
+                });
+            }
+        }
+
         for (var i = 0; i < count; i++)
         {
-            var item = _results[i];
-            var missing = _icons.IsMissing(item);
+            var row = BuildItemRow(_results[i], _store, _settings, _icons, _importPage, out var missing);
             if (missing)
             {
                 missingCount++;
             }
 
-            var tags = _settings.ShowTags
-                ? item.Tags.Select(tag => (ITag)new Tag(tag)).ToList()
-                : new List<ITag>();
-
-            if (missing)
-            {
-                tags.Add(new Tag("缺失"));
-            }
-
-            var subtitle = missing
-                ? $"⚠ 路径不存在 · {item.Target}"
-                : (_settings.ShowSubtitle ? (_settings.ShowFullPath ? item.Target : KindLabel(item.Kind)) : string.Empty);
-
-            rows.Add(new ListItem(new OpenItemCommand(_store, item))
-            {
-                Title = item.Title,
-                Subtitle = subtitle,
-                Tags = tags.ToArray(),
-                Icon = _icons.Get(item),
-                MoreCommands = BuildCommands(item),
-            });
+            rows.Add(row);
         }
 
-        // 「批量编辑」固定在列表最后，只在未输入检索词时出现（不参与检索、不干扰结果）；
-        // 空库时交给 EmptyContent，不追加这一行。导入入口只在行内「更多」里保留。
-        if (count >= _results.Length && _results.Length > 0 && string.IsNullOrWhiteSpace(_query))
+        // 「新建文件夹」「批量编辑」固定在列表最后，只在未输入检索词时出现；
+        // 空库时交给 EmptyContent，不追加这些行。导入入口只在行内「更多」里保留。
+        if (count >= _results.Length && _store.Items.Count > 0 && string.IsNullOrWhiteSpace(_query))
         {
+            rows.Add(new ListItem(new FolderCreatePage(_store))
+            {
+                Title = "新建文件夹",
+                Subtitle = "把条目分组；文件夹可改名、删除",
+                Icon = Icons.FolderAdd,
+            });
+
             // 宿主扩展页不能内嵌 HTML/WebView：这里起回环 HTTP 服务，用系统默认浏览器打开编辑器。
             rows.Add(new ListItem(new OpenHtmlEditorCommand(_store))
             {
@@ -221,11 +225,70 @@ internal sealed partial class ItemsPage : DynamicListPage
         return rows.ToArray();
     }
 
-    private IContextItem[] BuildCommands(LinkItem item)
+    internal static IListItem BuildItemRow(
+        LinkItem item,
+        LibraryStore store,
+        SettingsManager settings,
+        IconCache icons,
+        ImportPage importPage,
+        out bool missing)
+    {
+        missing = icons.IsMissing(item);
+        var tags = settings.ShowTags
+            ? item.Tags.Select(tag => (ITag)new Tag(tag)).ToList()
+            : new List<ITag>();
+
+        if (missing)
+        {
+            tags.Add(new Tag("缺失"));
+        }
+
+        var subtitle = missing
+            ? $"⚠ 路径不存在 · {item.Target}"
+            : (settings.ShowSubtitle ? (settings.ShowFullPath ? item.Target : KindLabel(item.Kind)) : string.Empty);
+
+        return new ListItem(new OpenItemCommand(store, item))
+        {
+            Title = item.Title,
+            Subtitle = subtitle,
+            Tags = tags.ToArray(),
+            Icon = icons.Get(item),
+            MoreCommands = BuildItemCommands(item, store, icons, importPage),
+        };
+    }
+
+    internal static IContextItem[] BuildFolderCommands(LibraryStore store, string folder)
+    {
+        // 「常用」名称与位置固定，不提供重命名 / 删除入口。
+        if (string.Equals(folder, LibraryStore.CommonFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        return new IContextItem[]
+        {
+            new CommandContextItem(new FolderRenamePage(store, folder))
+            {
+                Title = "重命名文件夹",
+                Icon = Icons.Edit,
+            },
+            new CommandContextItem(new FolderDeletePage(store, folder))
+            {
+                Title = "删除文件夹",
+                Subtitle = folder.StartsWith(LibraryStore.RootFolder + "/", StringComparison.OrdinalIgnoreCase)
+                    ? "条目会移入「常用」，不会删除条目"
+                    : "条目会被移回未分类，不会删除条目",
+                Icon = Icons.Delete,
+                IsCritical = true,
+            },
+        };
+    }
+
+    private static IContextItem[] BuildItemCommands(LinkItem item, LibraryStore store, IconCache icons, ImportPage importPage)
     {
         var commands = new List<IContextItem>
         {
-            new CommandContextItem(new AddItemPage(_store))
+            new CommandContextItem(new AddItemPage(store))
             {
                 Title = "添加条目",
                 Icon = Icons.Add,
@@ -245,12 +308,19 @@ internal sealed partial class ItemsPage : DynamicListPage
             Title = "复制目标",
         });
 
-        commands.Add(new CommandContextItem(new EditItemPage(_store, item))
+        commands.Add(new CommandContextItem(new MoveToFolderPage(store, icons, item))
+        {
+            Title = "移动到文件夹",
+            Subtitle = string.IsNullOrWhiteSpace(item.Folder) ? "当前：未分类" : $"当前：{item.Folder}",
+            Icon = Icons.FolderRow,
+        });
+
+        commands.Add(new CommandContextItem(new EditItemPage(store, item))
         {
             Title = "编辑",
         });
 
-        commands.Add(new CommandContextItem(new DeleteItemCommand(_store, item))
+        commands.Add(new CommandContextItem(new DeleteItemCommand(store, item))
         {
             Title = "删除",
             IsCritical = true,
@@ -258,7 +328,7 @@ internal sealed partial class ItemsPage : DynamicListPage
 
         // 宿主只给 IContentPage 暴露页面级 Commands，IListPage 没有「页面更多」，
         // 所以导入入口挂到每行的「更多」菜单里（同一个 ImportPage 实例，不新增第二套导入流程）。
-        commands.Add(new CommandContextItem(_importPage)
+        commands.Add(new CommandContextItem(importPage)
         {
             Title = "导入 CSV",
             Subtitle = "从 CSV / JSON / TXT 批量添加",
@@ -268,7 +338,7 @@ internal sealed partial class ItemsPage : DynamicListPage
         return commands.ToArray();
     }
 
-    private static string KindLabel(string kind) => kind switch
+    internal static string KindLabel(string kind) => kind switch
     {
         LinkKinds.Url => "网址",
         LinkKinds.File => "文件",

@@ -34,7 +34,8 @@ internal sealed partial class AddItemForm : FormContent
                 Text(root, "title"),
                 Text(root, "target"),
                 Split(Text(root, "aliases")),
-                Split(Text(root, "tags")));
+                Split(Text(root, "tags")),
+                folder: Text(root, "folder"));
 
             switch (result.Status)
             {

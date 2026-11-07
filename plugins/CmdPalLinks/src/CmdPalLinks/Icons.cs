@@ -20,6 +20,11 @@ internal static class Icons
 
     public static IconInfo FolderOpen { get; } = new("\uE838");
 
+    /// <summary>分组文件夹行（与文件系统目录的 FolderOpen 区分）。</summary>
+    public static IconInfo FolderRow { get; } = new("\uE8B7");
+
+    public static IconInfo FolderAdd { get; } = new("\uE8F4");
+
     public static IconInfo Import { get; } = new("\uE8B5");
 
     public static IconInfo Export { get; } = new("\uE78C");

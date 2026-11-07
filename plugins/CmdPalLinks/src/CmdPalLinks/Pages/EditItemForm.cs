@@ -21,7 +21,8 @@ internal sealed partial class EditItemForm : FormContent
             item.Target,
             item.Title,
             string.Join(", ", item.Aliases),
-            string.Join(", ", item.Tags));
+            string.Join(", ", item.Tags),
+            item.Folder);
     }
 
     public override ICommandResult SubmitForm(string payload)
@@ -40,7 +41,8 @@ internal sealed partial class EditItemForm : FormContent
                 AddItemForm.Text(root, "title"),
                 AddItemForm.Text(root, "target"),
                 AddItemForm.Split(AddItemForm.Text(root, "aliases")),
-                AddItemForm.Split(AddItemForm.Text(root, "tags")));
+                AddItemForm.Split(AddItemForm.Text(root, "tags")),
+                folder: AddItemForm.Text(root, "folder"));
 
             switch (result.Status)
             {

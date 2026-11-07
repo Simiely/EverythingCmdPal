@@ -71,15 +71,23 @@ internal sealed class LinkItem
     /// <summary>#RRGGBB；空 = 自动（跟随 iconKind），"none" = 透明底。</summary>
     public string IconColor { get; set; } = string.Empty;
 
-    /// <summary>单个 emoji，可空。</summary>
+    /// <summary>单个 emoji，可空；导入时可能保留多字符文字图标，渲染取首个字符。</summary>
     public string IconEmoji { get; set; } = string.Empty;
+
+    /// <summary>分组文件夹名；空 = 未分类。与 Kind=folder（本地目录）是两个维度。</summary>
+    public string Folder { get; set; } = string.Empty;
+
+    /// <summary>自定义图标来源 URL（如 iTab 的 src），空 = 用 favicon / 自绘图标。</summary>
+    public string IconSource { get; set; } = string.Empty;
 }
 
 internal sealed class LibraryData
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public List<string> Folders { get; set; } = new();
 
     public List<LinkItem> Items { get; set; } = new();
 }

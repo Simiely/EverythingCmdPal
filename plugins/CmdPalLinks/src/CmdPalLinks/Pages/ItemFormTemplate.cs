@@ -4,7 +4,7 @@ namespace CmdPalLinks.Pages;
 
 internal static class ItemFormTemplate
 {
-    public static string Build(string kind, string target, string title, string aliases, string tags)
+    public static string Build(string kind, string target, string title, string aliases, string tags, string folder = "")
     {
         var card = new JsonObject
         {
@@ -28,6 +28,7 @@ internal static class ItemFormTemplate
                 },
                 TextInput("target", "网址或路径", target, required: true),
                 TextInput("title", "标题（选填）", title),
+                TextInput("folder", "文件夹（选填）", folder),
                 TextInput("aliases", "别名（选填，逗号分隔）", aliases),
                 TextInput("tags", "标签（选填，逗号分隔）", tags),
             },
@@ -42,6 +43,7 @@ internal static class ItemFormTemplate
                         ["kind"] = "kind",
                         ["target"] = "target",
                         ["title"] = "title",
+                        ["folder"] = "folder",
                         ["aliases"] = "aliases",
                         ["tags"] = "tags",
                     },
