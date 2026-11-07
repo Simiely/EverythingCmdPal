@@ -837,3 +837,155 @@ F17 favicon 首次下载并缓存、F18 离线/404 回落、F19 Shell 图标、F
 - Release 输出绝对路径：`src\CmdPalLinks\bin\Release\net10.0-windows10.0.26100.0\win-x64\`
 - 资产目录（同路径下 `Assets\`）含 60 个 PNG。
 
+## 14. 文件夹分组与 iTab 分类导入（0.1.6.0）；两层结构（0.1.8.0）
+
+### 14.1 宿主能力边界（先确认再设计）
+
+| 事实 | 依据 | 影响 |
+| --- | --- | --- |
+| `IListPage` 没有页面级 `Commands` | SDK `Microsoft.CommandPalette.Extensions` 的接口定义（只有 `Items` / `SearchText` / `EmptyContent` 等） | 不能在「链接库」页顶部加「新建文件夹」按钮；入口只能做成列表行或行级 `MoreCommands` |
+| 行级只有 `MoreCommands` | `IListItem.MoreCommands` | 文件夹的重命名 / 删除挂在文件夹行的更多菜单 |
+| 页面本身可作为命令压栈 | `CommandItem` / `ListItem.Command` | 文件夹行 → `FolderItemsPage`；返回由宿主页面栈处理，不需要自绘返回按钮 |
+| 没有通用的「文本输入页」 | 宿主只有 `FormContent` 这套 Adaptive Card 表单 | 重命名 / 新建走 `FormContent` + `SubmitForm`，不硬造输入页 |
+
+结论：在「不改宿主」的前提下，能做的最大范围是「文件夹行 + 子列表 + 行级菜单 + 列表尾部新建入口 + 编辑器文件夹列」。
+
+### 14.2 数据模型（schema 3）
+
+```csharp
+public sealed class LinkItem {
+    public string Folder { get; set; } = "";      // 分组名；空 = 未分类
+    public string IconSource { get; set; } = "";  // 远程图标 URL（iTab src）
+    // …既有字段
+}
+public sealed class LibraryData {
+    public int SchemaVersion { get; set; } = 3;
+    public List<string> Folders { get; set; } = new();  // 顺序 + 空文件夹
+    public List<LinkItem> Items { get; set; } = new();
+}
+```
+
+- `folder` 与 `Kind=folder`（本地目录条目）是两个维度，互不覆盖；`folder` 不拼进 `tags`，也不写进标题前缀。
+- 0.1.8.0 起 `folder` 是**完整路径**：一级固定为 `网页链接`，二级为 `网页链接/常用` 与 `网页链接/<分类>`；
+  顶层 `folders` 同样保存完整路径（`网页链接`、`网页链接/常用`、`网页链接/本地工具`…）。
+  `LibraryStore.RootFolder` / `CommonFolder` 为常量；`TopFolderCounts()` 取无 `/` 的一级，
+  `ChildFolderCounts(parent)` 按前缀取直接子级，`CountInTree` 统计整棵子树，均不会重复计数。
+- 「常用」是实文件夹（0.1.8.0 为 68 条，0.1.9.0 合并清理后保留 65 条，`folder=网页链接/常用`），不是虚拟聚合：条目只属于一个文件夹，总数与各文件夹条数可相加核对。
+- 读取旧文件（schema ≤ 2）时，顶层 `folders` 为空，由条目的 `Folder` 反推；写入时把 `folders` 与条目里的 folder 取并集。
+- 文件夹名规范化：按 `/` 分段 `Trim`、换行转空格、每段 ≤ 64、总长 ≤ 256；`iconSource` 只接受 `http/https`。
+- 删除分类文件夹只做「分组解散」：条目移入 `网页链接/常用`（不再产生未分类散项），不删条目；
+  「常用」禁止改名 / 删除；重命名只改叶子名并保留父路径；新建文件夹默认落在 `网页链接` 之下。
+- 迁移（0.1.8.0）：68 条未分类 → `网页链接/常用`，193 条 → `网页链接/<原分类>`；迁移后 261 条、一级 1、二级 14、未分类 0。
+  备份 `LocalState/links.json.twolevel-bak` 与 `C:\Temp\cmdpaplinks-backup-20261107\links-before-twolevel.json`。
+
+### 14.3 页面结构
+
+- `ItemsPage`（链接库）：
+  - 有检索词 → 跨全部条目检索（不按文件夹过滤），不显示文件夹行；
+  - 无检索词 → 只渲染一级文件夹行（0.1.8.0 实际只剩「网页链接」，`Title=名称`、`Subtitle=「N 条」/「空文件夹」`）；
+    历史遗留的未分类条目仍会渲染，但迁移后为 0；
+  - 尾部固定两行：`新建文件夹`（`FolderCreatePage`，默认建在「网页链接」下）与 `批量编辑`（编辑器入口）。首页顶层命令仍是 1 条「链接库」。
+- `FolderItemsPage`：标题 = 叶子名，`PlaceholderText=「在此文件夹内搜索…」`；无检索词时先列直接子文件夹
+  （`ChildFolderCounts(_folder)`，点击继续压栈下钻），再列本层条目；「网页链接」的第二层固定为「常用」+ 13 分类，
+  「常用」由 `folders` 顺序保持第一位。返回上一层完全交给宿主页面栈（`Esc` / 返回键）。
+  布局与主列表共用同一设置：`ApplyLayout()` 在 `grid-medium` 时设 `MediumGridLayout { ShowTitle = true }`，
+  否则 `null`；并订阅 `SettingsChanged` 即时重排。网格下每格沿用 `icons.Get(item)` 的图标规则，标题由宿主画在图标下方，
+  条目的 `MoreCommands` 仍在（长按/右键触发）；列数由宿主窗口宽度决定（本次实测 8 列，17 条为 8 + 8 + 1 三行，
+  磁贴 100×100、图标约 48×44、标题在图标下方）。
+- `FolderCreatePage` / `FolderRenamePage` / `FolderDeletePage`：均为 `FormContent`；
+  新建只填名称时自动补 `网页链接/` 前缀；重命名只显示叶子名、提交时保留父路径；「常用」不提供改名 / 删除入口；
+  删除页先显示「将影响 N 条」，分类文件夹提示条目移入「常用」，避免一键清空。
+- `MoveToFolderPage`：行 =「（未分类）」+ 各文件夹（完整路径，含空文件夹）+「新建文件夹…」；
+  新建入口带回调，创建后立刻把条目移入。
+- 图标：`Icons.FolderRow` / `Icons.FolderAdd`（Segoe MDL2 字形）。
+
+### 14.4 编辑器与 CSV
+
+- 0.1.8.0 整体重做为单文件、离线、macOS 风格的**三分区**：顶部工具栏（品牌 / 搜索 / 导入 CSV / 导出 CSV / 保存到插件）下方
+  依次为左侧文件夹树（248px）、中间条目主区、右侧编辑详情（332px），底部状态栏显示同步状态与「N 条 · M 个二级文件夹」。
+  CSS 变量区分浅色 / 深色（`prefers-color-scheme`），统一 12px 圆角、细描边与轻阴影，hover / 选中 / 焦点 / 禁用状态齐全，系统字体栈、无外部 CDN。
+- 打开即请求 GET `/api/links`：返回 `{ok,count,folders,items}`，侧栏按路径渲染一级「网页链接」与二级「常用」+ 13 分类
+  （「常用」按 `sortFolders` 固定在第一位，显示 ★ 且无 ↑↓ / 改名 / 删除入口）；条目主区按所选文件夹过滤，右侧详情可改字段。
+- 文件夹关系编辑：`＋` 新建（建在 `网页链接` 下）、行内 ✎ 重命名（只改叶子名）、🗑 删除（弹窗说明条目移入「常用」）、
+  ↑↓ 交换显示顺序（仅交换 `state.folders` 顺序，不改条目 `folder`）；条目支持勾选后批量「移动」与「设为常用」，
+  单条行内 ★ 也直达「常用」。改动只写入内存，点「保存到插件」才 POST `{items,folders}`，`folders` 顺序即二级展示顺序。
+- CSV 表头：`type,target,title,alias,tags,emoji,color,icon,folder,iconSrc`；旧 8 列（无 folder/iconSrc）与 7 列仍可导入。
+  导出同时写出 folder（完整路径）与 iconSrc，BOM + CRLF；导入时空 folder 归入「常用」、叶子名补 `网页链接/` 前缀。
+  0.1.8.0 实测：导出 261 条 → 重新导入仍为 261 条 / 14 个二级文件夹（常用 68），保存后 `links.json` 一致。
+  0.1.9.0 未改 CSV 代码，导出/导入按当时库 562 条，列与规则不变；0.1.10.0 清理后按当前库 558 条导出。
+- emoji 保留完整 iTab 文字图标（渲染时取首字符）；图标缺失时按 emoji → iconSrc 图片 → 首字色块兜底。
+
+### 14.5 iTab → 链接库映射
+
+只读 iTab 的 LevelDB 副本（`Local Extension Settings\inedkoakiaeepjoblbiiipedngonadhn`，不触碰 Edge 数据）：
+
+| iTab 字段 | 链接库字段 | 说明 |
+| --- | --- | --- |
+| `name` | `title` | 原名称 |
+| `url` | `target` | 保留原始字符串；仅 http/https 参与导入 |
+| 父级 `folder.name` | `folder` | iTab 的两层导航结构原样保留 |
+| `src` | `iconSource` | 仅 http/https |
+| `iconText` | `iconEmoji` + `iconKind=emoji` | 文字图标（可多字符） |
+| `backgroundColor` | `iconColor` + `iconKind=block` | `#RRGGBB`；`transparent` 记 `iconKind=transparent` |
+| 无以上自定义 | `iconKind=auto` | 回落 favicon / 首字 |
+
+- 去重键与存储层一致：scheme/host 小写、根路径 `/` 归一为空、保留 query、忽略 fragment。
+- 快照统计：两个页签共 301 个节点 = 283 个带 `url` 的节点 + 其余组件；其中 272 个是非文件夹叶子链接
+  （另 11 个是文件夹节点自带的 `url`，只当分组、不建条目），13 个文件夹。叶子链接里再跳过非 http(s) 1 条、去重 12 条，新增 259 条。
+- 导入前备份：`LocalState/links.json.itab-bak`（安装流程之外的第二份）与 `C:\Temp\itab-readonly-20261106\links-before-itab-import.json`。
+- 已知限制：iTab 的 138 个 `src` 中有 75 个是 SVG，本机图标缓存按字节嗅探扩展名，无法识别 SVG，
+  这类条目回落 favicon；数据与 CSV 仍完整保留 `iconSrc`，后续可加 SVG 解析而无需再导数据。
+
+### 14.6 Edge 收藏夹合并、去重、失效清理与重分类（0.1.9.0）
+
+完整数字与明细见 [edge-merge-report.md](edge-merge-report.md)。概要：
+
+- 只读复制 `%LOCALAPPDATA%\Microsoft\Edge\User Data\Profile 2\Bookmarks` 后解析，原文件未改动；
+  418 条收藏（书签栏 416 / 其他书签 0 / 移动收藏夹 2）、33 个文件夹节点、最大层级 4，标题 / URL / 添加时间均保留。
+- URL 归一化后与原有 261 条一起判重：97 个重复组（23 组完全相同、74 组同 URL 不同标题），
+  Edge 的 100 条重复未导入；Edge 内部重复 3 组、旧库内部重复 0；52 个站点 / 181 个 URL 属「同站不同页」，只报告不合并。
+  合并保留原条目，Edge 不同标题追加为别名（75 个）；Edge 独有的 317 条进入 `网页链接/待分类`。
+- 逐条实际探测 577 个 URL：430 可达 / 128 待确认 / 19 明确失效；网络级失败 8.8%，低于 30% 中止阈值。
+  19 条 404 复核后删 15 条真 404（其中原有 261 条中 6 条），4 条软 404 与其余 401/403/429/超时/TLS/5xx 共 132 条列入待确认，不自动删。
+- 重分类：保留 13 个分类的名称与顺序，「常用」固定第一并保留 65 条精选；其余 497 条按域名 / 标题关键词 / 分类语义重新识别，
+  一条只属于一个文件夹，未分类 0。原有 261 条中 17 条换分类、173 条维持原分类。
+- 最终 562 条：一级 1、二级 14（常用 + 13）、未分类 0、空标题 0、归一化重复 URL 0；schema 3 与图标字段完整。
+  安装 0.1.9.0 后 UIA 实测首页 3 项、二级 14 项（常用第一），各文件夹条数与数据一致。
+
+### 14.7 132 条待确认项的浏览器复核（0.1.10.0）
+
+完整逐条记录与证据见 [browser-recheck-report.md](browser-recheck-report.md)。概要：
+
+- 方法：headless Microsoft Edge（Playwright，临时 profile、不弹窗、不抢焦点、串行、单条 ≤15s、不加载图片/字体/媒体），
+  以页面实际内容、最终 URL、标题与可见正文为准，不再只信 HTTP 状态码。
+- 结果：132 条 → 删除 4 / 保留 45 / 保留·需人工 79 / 疑似失效 4。
+  - 删除 4：`getitfree.cn`（LiteSpeed 404 首页）、`min-liu.com` 文章页（明确 404）、`btbat.com`（nginx 404 首页）、
+    `macapp.cc`（域名停放/待售）。
+  - 疑似 4（未删）：`bing.com/create`（跳转后 404，但属常用服务）、`rendercrate.com/3D/search`（404 且空正文）、
+    旧 mail.com 会话 URL 跳首页、威锋帖子跳「无此页面」。
+  - 保留·需人工 79：15s 超时、连接被对端关闭、TLS 协议错误、资源/下载拦截、本机与局域网服务未启动等；
+    网络层失败不等于站点失效，一律不删。`localhost` / `127.0.0.1` / `192.168.*` 条目保留（服务未运行）。
+  - 反例修正：`srtku.com` 虽返回 404，但页面是「网站防火墙 + 验证码」→ 保留；`masuit.com` 已迁到 `masuit.net` 且落点为浏览器验证页 → 保留。
+- 清理后 **558** 条（562 − 4）：一级 1、二级 14（常用 65 + 13 分类）、未分类 0、空标题 0、重复 URL 0，校验 `errors 0`。
+- 安装 0.1.10.0（Release，标准流程，LocalState 656 文件快照恢复 SHA256 全一致）；UIA 首页 3 项、二级 14 项（常用第一），
+  软件 75、参考 28、三维素材 40，其余不变，全部与数据一致（BAD=0）。
+
+### 14.8 核验轮数实测与 79 条重核（0.1.11.0）
+
+完整方法与逐轮证据见 [link-multiround-report.md](link-multiround-report.md)。概要：
+
+- 轮数依据：公开工具 lychee 默认 2–3 次重试 / 1–2s 等待，markdown-link-check `retryOn429` + `retryCount 2–5` + 30s 退避，
+  Screaming Frog 建议对 404 用浏览器复验；通用重试语义把 404/400/401 视为终端错误、超时/5xx/429 视为瞬态错误。
+- 本机实测：79 条 × 3 轮串行真实渲染（headless Edge、系统代理、单条 30s、轮间 90s，共 237 次导航、约 40.6 分钟）。
+  翻转率：确定性失败 **0/4 = 0%**、抖动型失败 **4/67 = 5.97%**、首轮成功 **5/8 = 62.5%** 后续又失败；整体 **9/79 = 11.39%**。
+  结论：**确定性失败 1–2 轮、抖动型 3 轮、间隔 60–90 秒、单条超时 30 秒**。
+- 按该口径重核 79 条：4 条本机/局域网地址（`localhost`、`192.168.*`）跳过探测直接保留；75 条各 3 轮，
+  删除 **0**、至少 1 轮成功 **12**（精靈學院 503→200→503、Steam 200→超时→200、CGer 405→200→405 等）、仍需人工 **63**
+  （超时 21、连接重置 10、资源拦截 23、5xx 3、4xx 2、TLS/空正文/重定向各 1）。
+  4 条已删对照 3 轮全部确定性失败，维持删除、不恢复。
+- 数据未变（**558**），一级 1 / 二级 14 / 未分类 0 / 空标题 0 / 重复 URL 0，校验 `errors 0`。
+  安装 0.1.11.0（LocalState 657 文件快照恢复 SHA256 全一致，`Status: Ok`）；UIA 首页 3 项、二级 14 项（常用第一），
+  14 个文件夹计数 BAD=0。
+
+
+
