@@ -90,6 +90,29 @@ internal sealed class IconCache
     /// <summary>同步取图标；未命中时返回通用图标并在后台补齐，完成后触发 <see cref="Changed"/>。</summary>
     public IconInfo Get(LinkItem item)
     {
+        // 自定义图标来源（iTab 的 src）优先：下载原图并按 URL 缓存；失败后回落到自绘/favicon。
+        var source = LibraryStore.NormalizeIconSource(item.IconSource);
+        if (source.Length > 0 && string.Equals(item.Kind, LinkKinds.Url, StringComparison.OrdinalIgnoreCase))
+        {
+            var sourceKey = "src|" + source;
+            var sourceCached = FindCached(sourceKey, out var sourceExpired);
+            if (sourceCached is not null)
+            {
+                if (sourceExpired)
+                {
+                    ScheduleSource(sourceKey, source);
+                }
+
+                return new IconInfo(sourceCached);
+            }
+
+            if (!_failed.ContainsKey(sourceKey))
+            {
+                ScheduleSource(sourceKey, source);
+                return Icons.ForKind(item.Kind);
+            }
+        }
+
         if (IconKinds.IsCustom(item.IconKind, item.IconEmoji, item.IconColor))
         {
             return GetCustom(item);
@@ -443,6 +466,81 @@ internal sealed class IconCache
                 _inflight.TryRemove(host, out _);
             }
         });
+    }
+
+    private void ScheduleSource(string key, string url)
+    {
+        if (_failed.ContainsKey(key) || !_inflight.TryAdd(key, 0))
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _downloads.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    await FetchSourceAsync(key, url).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _downloads.Release();
+                }
+            }
+            catch (Exception ex)
+            {
+                HostLog.Error($"custom icon task failed: url={url} {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                _inflight.TryRemove(key, out _);
+            }
+        });
+    }
+
+    private async Task FetchSourceAsync(string key, string url)
+    {
+        try
+        {
+            using var response = await Http
+                .GetAsync(new Uri(url), HttpCompletionOption.ResponseHeadersRead)
+                .ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _failed.TryAdd(key, 0);
+                HostLog.Info($"custom icon unavailable: url={url} status={response.StatusCode}");
+                return;
+            }
+
+            var length = response.Content.Headers.ContentLength;
+            if (length is > MaxBytes)
+            {
+                _failed.TryAdd(key, 0);
+                HostLog.Info($"custom icon unavailable: url={url} bytes={length} reason=too-large");
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            var ext = ExtensionOf(bytes);
+            if (ext is null || bytes.LongLength > MaxBytes)
+            {
+                _failed.TryAdd(key, 0);
+                HostLog.Info($"custom icon unavailable: url={url} bytes={bytes.Length} reason=not-an-image");
+                return;
+            }
+
+            if (await SaveAsync(key, ext, bytes).ConfigureAwait(false))
+            {
+                HostLog.Info($"custom icon fetched: url={url} ext={ext} bytes={bytes.Length}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _failed.TryAdd(key, 0);
+            HostLog.Error($"custom icon fetch failed: url={url} {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private async Task FetchAsync(string host)
