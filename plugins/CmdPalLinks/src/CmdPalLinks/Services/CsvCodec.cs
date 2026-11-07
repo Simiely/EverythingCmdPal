@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -34,12 +33,15 @@ internal readonly record struct ImportParseResult(ImportPreview? Preview, string
 
 /// <summary>
 /// CSV/JSON/TXT 解析与 CSV 导出。
-/// CSV 表头为 type,target,title,alias,tags,emoji,color,icon；旧版 7 列（无 icon）仍可导入。
+/// CSV 表头为 type,target,title,alias,tags,emoji,color,icon,folder,iconSrc；
+/// 旧版 8 列（无 folder/iconSrc）与 7 列（无 icon）仍可导入。
 /// icon 列保存 IconKind，避免 auto/block/transparent/emoji 在 CSV 往返中被按颜色推断后丢失。
 /// </summary>
 internal static class CsvCodec
 {
-    public const string Header = "type,target,title,alias,tags,emoji,color,icon";
+    public const string Header = "type,target,title,alias,tags,emoji,color,icon,folder,iconSrc";
+
+    public const string V2Header = "type,target,title,alias,tags,emoji,color,icon";
 
     public const string LegacyHeader = "type,target,title,alias,tags,emoji,color";
 
@@ -48,6 +50,8 @@ internal static class CsvCodec
     private const int MaxBytes = 5 * 1024 * 1024;
 
     private static readonly string[] HeaderFields = Header.Split(',');
+
+    private static readonly string[] V2HeaderFields = V2Header.Split(',');
 
     private static readonly string[] LegacyHeaderFields = LegacyHeader.Split(',');
 
@@ -123,6 +127,10 @@ internal static class CsvCodec
         {
             expected = HeaderFields;
         }
+        else if (header.Length == V2HeaderFields.Length)
+        {
+            expected = V2HeaderFields;
+        }
         else if (header.Length == LegacyHeaderFields.Length)
         {
             expected = LegacyHeaderFields;
@@ -132,7 +140,7 @@ internal static class CsvCodec
         {
             return new ImportParseResult(
                 null,
-                $"表头不匹配。期望：{Header}（旧版 {LegacyHeader} 也可）；实际：{string.Join(',', header)}");
+                $"表头不匹配。期望：{Header}（旧版 {V2Header} / {LegacyHeader} 也可）；实际：{string.Join(',', header)}");
         }
 
         if (records.Count - 1 > MaxRows)
@@ -244,6 +252,8 @@ internal static class CsvCodec
                 IconKind = IconKinds.Normalize(raw.IconKind),
                 IconColor = (raw.IconColor ?? string.Empty).Trim(),
                 IconEmoji = (raw.IconEmoji ?? string.Empty).Trim(),
+                Folder = LibraryStore.NormalizeFolderName(raw.Folder),
+                IconSource = LibraryStore.NormalizeIconSource(raw.IconSource),
                 CreatedAt = DateTimeOffset.UtcNow,
                 UpdatedAt = DateTimeOffset.UtcNow,
             };
@@ -349,7 +359,29 @@ internal static class CsvCodec
         var title = fields[2].Trim();
         var aliases = SplitList(fields[3]);
         var tags = SplitList(fields[4]);
-        var emoji = FirstTextElement(fields[5].Trim());
+        var emoji = fields[5].Trim();
+
+        var folder = string.Empty;
+        var iconSource = string.Empty;
+        if (fields.Length > V2HeaderFields.Length)
+        {
+            folder = LibraryStore.NormalizeFolderName(fields[8]);
+            if (folder.Length > 64 || folder.Any(char.IsControl))
+            {
+                preview.Issues.Add(new ImportIssue(line, "文件夹名不能包含换行/控制字符，且不超过 64 个字符"));
+                return null;
+            }
+        }
+
+        if (fields.Length > V2HeaderFields.Length + 1)
+        {
+            var rawSource = fields[9].Trim();
+            iconSource = LibraryStore.NormalizeIconSource(rawSource);
+            if (rawSource.Length > 0 && iconSource.Length == 0)
+            {
+                preview.Warnings.Add(new ImportIssue(line, $"iconSrc “{rawSource}”不是 http(s) URL，已忽略"));
+            }
+        }
 
         var colorText = fields[6].Trim();
         var iconKind = IconKinds.Auto;
@@ -421,6 +453,8 @@ internal static class CsvCodec
             IconKind = iconKind,
             IconColor = iconColor,
             IconEmoji = emoji,
+            Folder = folder,
+            IconSource = iconSource,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -489,16 +523,6 @@ internal static class CsvCodec
         }
 
         return result.ToArray();
-    }
-
-    private static string FirstTextElement(string value)
-    {
-        if (value.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        return StringInfo.GetNextTextElement(value).Trim();
     }
 
     private static bool IsHexColor(string value)
@@ -640,7 +664,9 @@ internal static class CsvCodec
                 .Append(Escape(string.Join('|', item.Tags ?? Array.Empty<string>()))).Append(',')
                 .Append(Escape(item.IconEmoji ?? string.Empty)).Append(',')
                 .Append(Escape(color)).Append(',')
-                .Append(Escape(IconKinds.Normalize(item.IconKind)))
+                .Append(Escape(IconKinds.Normalize(item.IconKind))).Append(',')
+                .Append(Escape(item.Folder ?? string.Empty)).Append(',')
+                .Append(Escape(item.IconSource ?? string.Empty))
                 .Append("\r\n");
         }
 

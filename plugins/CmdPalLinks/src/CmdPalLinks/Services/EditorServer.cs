@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -332,10 +333,16 @@ internal static class EditorServer
                     IconEmoji = dto.Emoji ?? string.Empty,
                     IconColor = dto.Color ?? string.Empty,
                     IconKind = dto.IconKind ?? IconKinds.Auto,
+                    Folder = LibraryStore.NormalizeFolderName(dto.Folder),
+                    IconSource = LibraryStore.NormalizeIconSource(dto.IconSrc),
                 });
             }
 
-            var result = _store.ReplaceAll(incoming);
+            var folders = payload.Folders?
+                .Where(folder => folder is not null)
+                .Select(folder => folder!)
+                .ToArray();
+            var result = _store.ReplaceAll(incoming, folders);
             if (!result.Success)
             {
                 await WriteJsonAsync(stream, 400, "Bad Request", ErrorJson(result.Message, result.ErrorLine), ct).ConfigureAwait(false);
@@ -364,10 +371,14 @@ internal static class EditorServer
                         ? string.Empty
                         : item.IconColor ?? string.Empty,
                     iconKind = IconKinds.Normalize(item.IconKind),
+                    folder = item.Folder ?? string.Empty,
+                    iconSrc = item.IconSource ?? string.Empty,
                 });
             }
 
-            return JsonSerializer.SerializeToUtf8Bytes(new { ok = true, count = items.Count, items }, JsonOptions);
+            return JsonSerializer.SerializeToUtf8Bytes(
+                new { ok = true, count = items.Count, folders = _store.Folders, items },
+                JsonOptions);
         }
 
         private static byte[] BuildSavedJson(ReplaceResult result)
@@ -611,6 +622,9 @@ internal static class EditorServer
     private sealed class EditorSaveRequest
     {
         public List<EditorItemDto?>? Items { get; set; }
+
+        /// <summary>编辑器提交的完整文件夹顺序（可含空文件夹）；缺省 = 保留现有文件夹。</summary>
+        public List<string?>? Folders { get; set; }
     }
 
     private sealed class EditorItemDto
@@ -632,5 +646,9 @@ internal static class EditorServer
         public string? Color { get; set; }
 
         public string? IconKind { get; set; }
+
+        public string? Folder { get; set; }
+
+        public string? IconSrc { get; set; }
     }
 }
