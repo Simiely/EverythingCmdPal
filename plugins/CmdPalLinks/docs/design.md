@@ -1010,10 +1010,11 @@ public sealed class LibraryData {
   保存 payload 含顶层 `folders` 且新条目 `folder=""`）；安装 0.1.12.0（LocalState 657 文件快照 SHA256 全一致，`Status: Ok`），
   扩展日志 `store loaded: 558 items, 15 folders`。
 
-### 14.10 场景走查与复选框修复（0.1.13.0–0.1.15.0）
+### 14.10 场景走查与复选框修复（0.1.13.0–0.1.16.0）
 
-按 workbuddy-skills `scenario-walkthrough` v3 做首轮 12 条 + 追加 5 条场景、共 3 轮走查，完整能力清单、覆盖矩阵、
-证据与残余风险见 [walkthrough/2026-11-09-cmdpallinks.md](walkthrough/2026-11-09-cmdpallinks.md)。累计 17 个问题全部修复：
+按 workbuddy-skills `scenario-walkthrough` v3 做首轮 12 条 + 追加 5 条场景、共 3 轮走查，用户回归又补 1 条作用域问题；
+完整能力清单、覆盖矩阵、证据与残余风险见 [walkthrough/2026-11-09-cmdpallinks.md](walkthrough/2026-11-09-cmdpallinks.md)。
+累计 18 个问题全部修复：
 
 - **P-01 复选框**：`renderList` 的 `cb` 只 `stopPropagation`，勾选只更新 `state.selectedIds` + 批量栏，不再触发行 `selectItem → renderAll`
   导致复选框重建、`change` 丢失。这是「多选框用不了」的直接原因。
@@ -1024,10 +1025,13 @@ public sealed class LibraryData {
 - 第 2/3 轮追加：P-11 空文件夹保留 EmptyContent；P-12 编辑器 folder 前端校验（每段 ≤64 / 总长 ≤256 / 禁控制字符）；
   P-13 含子文件夹的删除菜单提示；P-14 搜索无结果空态文案；P-15 新建文件夹增加「当前文件夹内」；
   **P-16（真缺陷）** `LibraryStore.Add/Update` 补 folder 校验；P-17 `ImportBatch` 跳过非法 folder。
+- 用户回归 P-18：编辑器选中「网页链接」时曾用全库 `state.items`，把未分类 / 顶层文件夹条目也显示进来；
+  改为 `isUnder(folder, 网页链接)` 只取自身子树，列表计数用 `countInTree(ROOT)`，子文件夹 meta 用本层直接条数。
 - 验证：编辑器脚本 `node --check` 通过；headless Edge 用例覆盖勾选 1→2→3 / 取消 / 行点击保持勾选 / 批量目标保持 /
   搜索清空选择 / 搜索无结果空态 / 超长 folder 拦截 / 当前层新建子文件夹 / 嵌套文件夹 / 含子级拒绝删除 /
-  顶层改名删除 / 保存 payload；安装 0.1.15.0，扩展日志确认 `Started extension CmdPalLinks_0.1.15.0`、
-  `Loaded 1 command(s)`。
+  顶层改名删除 / 保存 payload；真实 C# 后端用例（当前库副本 558 条 / 2 条未分类）确认网页链接只显示 556 条、
+  未分类只显示 2 条，保存后 559 条 / 16 文件夹；安装 0.1.16.0，扩展日志确认
+  `Started extension CmdPalLinks_0.1.16.0`、`Loaded 1 command(s)`。
 
 
 

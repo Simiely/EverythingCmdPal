@@ -32,7 +32,8 @@ PowerToys Command Palette 的「链接库」扩展：把常用的网址、文件
   编辑器按 macOS 风格分为「文件夹侧栏 / 条目主区 / 编辑详情」三区，支持新建 / 重命名 / 删除文件夹、调整文件夹顺序
   （「常用」固定在第一位）、条目批量移动与「设为常用」，覆盖 hover / 选中 / 焦点 / 禁用状态，空态与长标题都有兜底显示。
   侧栏顶部「未分类（网页链接 外）」可查看 / 新增 / 编辑不归属任何文件夹的条目；顶层文件夹与「网页链接」同级显示，
-  可改名、删除；新建文件夹可选顶层或「网页链接」内；保存会提交完整文件夹顺序，不再把空 folder 强塞进「常用」。
+  可改名、删除；选中「网页链接」时只显示它自己的子树，不会把未分类或顶层文件夹的条目混进来；
+  新建文件夹可选顶层或「网页链接」内；保存会提交完整文件夹顺序，不再把空 folder 强塞进「常用」。
 - 导入/导出：CSV（`type,target,title,alias,tags,emoji,color,icon,folder,iconSrc`，旧版 8 / 7 列仍可导入）/ JSON，两段式预览后确认导入，可撤销上次导入。
 - 图标：自定义 emoji / 色块 / 透明底由 GDI 自绘为单色 PNG（彩色 emoji 字形为已知限制）；
   条目可带 `iconSrc` 远程图片（如 iTab 导入的 `src`），无可用图片时回落站点 favicon / 类型字形 / 首字色块。
@@ -86,5 +87,5 @@ dotnet build plugins\CmdPalLinks\tests\StoreHarness\StoreHarness.csproj
 ## 发版
 
 按 [docs/release.md](../../docs/release.md)：tag `cmdpallinks-v<版本>`，资产 `CmdPalLinks-<版本>.msix` + `.sha256`，
-`Identity Version` 每次递增（当前 `0.1.15.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)；
+`Identity Version` 每次递增（当前 `0.1.16.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)；
 场景走查报告见 [docs/walkthrough/2026-11-09-cmdpallinks.md](docs/walkthrough/2026-11-09-cmdpallinks.md)。
