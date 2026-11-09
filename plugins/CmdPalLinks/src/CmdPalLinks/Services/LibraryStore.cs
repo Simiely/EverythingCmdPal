@@ -368,6 +368,12 @@ internal sealed class LibraryStore
             return new AddResult(AddStatus.InvalidTarget, null, error);
         }
 
+        var folderName = NormalizeFolderName(folder);
+        if (folderName.Length > 0 && !IsValidFolderName(folderName))
+        {
+            return new AddResult(AddStatus.InvalidTarget, null, "文件夹名不能包含控制字符，且每段不超过 64 个字符");
+        }
+
         var now = DateTimeOffset.UtcNow;
         var item = new LinkItem
         {
@@ -380,7 +386,7 @@ internal sealed class LibraryStore
             IconKind = IconKinds.Normalize(iconKind),
             IconColor = (iconColor ?? string.Empty).Trim(),
             IconEmoji = (iconEmoji ?? string.Empty).Trim(),
-            Folder = NormalizeFolderName(folder),
+            Folder = folderName,
             IconSource = NormalizeIconSource(iconSource),
             CreatedAt = now,
             UpdatedAt = now,
@@ -459,8 +465,14 @@ internal sealed class LibraryStore
             item.Tags = Clean(tags);
             if (folder is not null)
             {
-                item.Folder = NormalizeFolderName(folder);
-                AddFolderLocked(item.Folder);
+                var folderName = NormalizeFolderName(folder);
+                if (folderName.Length > 0 && !IsValidFolderName(folderName))
+                {
+                    return new UpdateResult(UpdateStatus.InvalidTarget, null, "文件夹名不能包含控制字符，且每段不超过 64 个字符");
+                }
+
+                item.Folder = folderName;
+                AddFolderLocked(folderName);
             }
 
             if (iconSource is not null)
@@ -849,6 +861,13 @@ internal sealed class LibraryStore
                         continue;
                     }
 
+                    var sourceFolder = NormalizeFolderName(source.Folder);
+                    if (sourceFolder.Length > 0 && !IsValidFolderName(sourceFolder))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
                     var existing = known.GetValueOrDefault(key);
                     if (existing is not null)
                     {
@@ -864,10 +883,10 @@ internal sealed class LibraryStore
                         existing.IconKind = source.IconKind;
                         existing.IconColor = (source.IconColor ?? string.Empty).Trim();
                         existing.IconEmoji = (source.IconEmoji ?? string.Empty).Trim();
-                        if (!string.IsNullOrWhiteSpace(source.Folder))
+                        if (sourceFolder.Length > 0)
                         {
-                            existing.Folder = NormalizeFolderName(source.Folder);
-                            AddFolderLocked(existing.Folder);
+                            existing.Folder = sourceFolder;
+                            AddFolderLocked(sourceFolder);
                         }
 
                         if (!string.IsNullOrWhiteSpace(source.IconSource))
@@ -891,7 +910,7 @@ internal sealed class LibraryStore
                         IconKind = IconKinds.Normalize(source.IconKind),
                         IconColor = (source.IconColor ?? string.Empty).Trim(),
                         IconEmoji = (source.IconEmoji ?? string.Empty).Trim(),
-                        Folder = NormalizeFolderName(source.Folder),
+                        Folder = sourceFolder,
                         IconSource = NormalizeIconSource(source.IconSource),
                         CreatedAt = DateTimeOffset.UtcNow,
                         UpdatedAt = DateTimeOffset.UtcNow,
