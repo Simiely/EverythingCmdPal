@@ -2,6 +2,69 @@
 
 格式：`<版本> · <日期>` + 变更点。版本与 `Package.appxmanifest` 的 `Identity Version` 一致。
 
+## 0.1.15.0 · 2026-11-09
+
+- 按要求再走查 2 轮（第 2/3 轮），新增 7 个问题，全部修复；累计 17 个问题（2 个真缺陷 / 其余 UX、一致性、可操作点）。
+  报告已补第二轮/第三轮：见 [docs/walkthrough/2026-11-09-cmdpallinks.md](docs/walkthrough/2026-11-09-cmdpallinks.md)。
+- **P-16（真缺陷）**：`LibraryStore.Add` / `Update` 只规范化 folder，不校验 64 字符/控制字符；CmdPal 表单可把非法 folder 写进条目。
+  补 `IsValidFolderName` 校验，非法时返回 `InvalidTarget`，不落盘。
+- P-17：`ImportBatch` 遇到非法 folder 不跳过；改为计入 skipped，不污染数据。
+- P-11：`FolderItemsPage` 无条件追加「添加到此文件夹」，空文件夹不再显示 EmptyContent 的空态提示；改为有行才追加。
+- P-12：编辑器新建/改名/CSV 导入未校验 folder 长度；新增 `folderValidationError`（每段 ≤64、总长 ≤256、禁控制字符），
+  创建/改名/导入都在前端拦下，不再等保存失败。
+- P-13：CmdPal 含子文件夹的删除菜单仍写「条目会移入常用」；改为「含子文件夹，需先删除子文件夹」。
+- P-14：编辑器搜索无结果时空态仍写「这个文件夹还没有条目」；改为「没有匹配的条目 / 换个关键词」。
+- P-15：新建文件夹只有「网页链接内 / 顶层」；新增「当前文件夹内」并作为选中文件夹时的默认位置。
+- 回归：`node --check` 通过；headless Edge 用例新增覆盖超长 folder 拦截、搜索无结果空态、当前文件夹内新建子文件夹；
+  原有勾选、批量目标保持、搜索清空选择、嵌套树、含子级拒绝删除、顶层改名/删除、未分类新建、保存 payload 全部通过。
+- 安装实测：`0.1.15.0`（Release，标准流程；LocalState 657 文件快照 SHA256 全一致，`Status: Ok`）；
+  扩展日志 `Started extension CmdPalLinks_0.1.15.0` / `store loaded: 558 items, 15 folders`。
+
+## 0.1.14.0 · 2026-11-09
+
+- 收尾场景走查的 3 个极低风险项：
+  - P-08：批量目标下拉每次 `renderBulk` 被重置为「未分类」；把目标存进 `state.bulkTarget`，重建后恢复。
+  - P-09：搜索过滤时已勾选但被隐藏的条目仍参与批量；搜索词变化时清空 `state.selectedIds`。
+  - P-10：新条目临时 id 为 `new-<timestamp>`，同一毫秒连续新建可能撞 id；追加递增序号 `newIdSeq`。
+- 回归：`node --check` 通过；headless Edge 用例新增覆盖「批量目标保持」「搜索清空选择」，
+  原有勾选、取消、行点击保持勾选、嵌套树、含子级拒绝删除、顶层改名/删除、未分类新建、保存 payload 全部通过。
+- 走查报告已更新为 10 个问题全部修复，见
+  [docs/walkthrough/2026-11-09-cmdpallinks.md](docs/walkthrough/2026-11-09-cmdpallinks.md)。
+
+## 0.1.13.0 · 2026-11-09
+
+- 按 workbuddy-skills `scenario-walkthrough` v3 对当前插件走查：12 条场景链（首页/文件夹页/编辑器/CSV/保存失败），
+  发现 7 个问题（1 个真缺陷 + 6 个 UX/一致性/可操作点），全部修复。报告见
+  [docs/walkthrough/2026-11-09-cmdpallinks.md](docs/walkthrough/2026-11-09-cmdpallinks.md)。
+- **P-01（真缺陷）网页编辑器复选框用不了**：点击冒泡到整行 `onclick` → `selectItem` → `renderAll` 重建复选框，
+  `change` 丢失，表现为勾不上并误触发详情选中。改为复选框 `click` stopPropagation，勾选只更新批量栏，不再重绘列表。
+- P-02：首页有文件夹但 0 条目时，尾部「添加条目/新建文件夹/批量编辑」不渲染；条件改为 `Items > 0 || Folders > 0`。
+- P-03：CmdPal 允许改名/删除「网页链接」，与编辑器「不可删除」不一致；`BuildFolderCommands` 与「常用」一起保护。
+- P-04：删除文件夹确认页只数直接条目；改为 `CountInTree`，含子文件夹时明确提示先删子文件夹。
+- P-05：编辑器重命名冲突检查大小写敏感；改为忽略大小写，与 Store 一致。
+- P-06：编辑器删除父文件夹会连带子文件夹；改为含子级时拒绝，与 CmdPal 一致。
+- P-07：编辑器文件夹树只渲染两级；改为递归渲染任意深度，名称含 `/` 创建的层级可见可操作。
+- 回归：编辑器脚本 `node --check` 通过；headless Edge 用例通过（勾选 1→2、取消、点行保持勾选、含子文件夹拒绝删除、
+  顶层改名/删除、未分类新建、保存 payload 含顶层与嵌套文件夹、空 folder 保留）；`dotnet build` 0 警告 0 错误。
+- 安装实测：`0.1.13.0`（Release，标准流程；LocalState 657 文件快照 SHA256 全一致，`Status: Ok`）；
+  扩展日志 `Started extension CmdPalLinks_0.1.13.0` / `Loaded 1 command(s)`，数据仍 558 条 / 15 个文件夹
+  （其中 1 条 `D:\Tool` 位于网页链接外，`folder=""`，属新能力的合法未分类状态）。
+
+## 0.1.12.0 · 2026-11-09
+
+- 修复「网页链接」外面不能新增 / 修改的问题。此前首页尾部只有「新建文件夹」和「批量编辑」，没有「添加条目」；
+  新建文件夹又对不含 `/` 的名称强制补 `网页链接/`；编辑器加载时把空 `folder` 强转成 `网页链接/常用`，保存只提交
+  「网页链接 / 常用 / 二级文件夹」，导致网页链接外的散项和顶层文件夹无法新增，已有内容也会被移走或丢掉顺序。
+- CmdPal：首页尾部新增「添加条目」（`folder` 留空 = 未分类）；每个文件夹页尾部新增「添加到此文件夹」（默认当前层）；
+  「新建文件夹」表单增加「位置」，可选「网页链接」内（默认）或顶层（网页链接 外）；顶层文件夹删除后条目回落到未分类。
+- 编辑器：侧栏顶部新增「未分类（网页链接 外）」；按 `folders` 顺序显示所有顶层文件夹及直接子级；新建文件夹可选顶层 / 网页链接 内；
+  顶层文件夹可改名、删除（条目回落到未分类）；主区标题栏固定「＋ 新建条目」；检查器文件夹下拉与批量移动目标都含「未分类」；
+  保存提交完整 `folders`（含顶层与空文件夹），空 `folder` 原样保留；CSV 空 folder = 未分类、非空按完整路径。
+- 验证：`dotnet build` 0 警告 0 错误；headless Edge 编辑器用例通过（顶层文件夹新建 / 改名 / 删除、未分类新建条目、
+  保存 payload 含顶层 folders 且新条目 `folder=""`）。
+- 安装实测：`0.1.12.0`（Release，标准 `install.ps1 -NoBump`；LocalState 657 文件快照恢复 SHA256 全一致，`Status: Ok`）；
+  扩展日志 `store loaded: 558 items, 15 folders`、`Loaded 1 command(s)`，数据未变。
+
 ## 0.1.11.0 · 2026-11-07
 
 - 先做「一条链接核几遍才靠谱」实测：79 条样本 × 3 轮串行真实渲染（headless Edge、系统代理、单条 30s、轮间 90s，共 237 次导航、约 40.6 分钟），
