@@ -95,6 +95,8 @@ button{cursor:pointer}
   color:var(--text-2);cursor:default;position:relative;
 }
 .tree-row.root{font-weight:600;color:var(--text);height:36px}
+.tree-row.toplevel{font-weight:600}
+.tree-row.child{padding-left:18px}
 .tree-row:hover{background:rgba(120,120,128,.10);color:var(--text)}
 .tree-row.selected{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .tree-row .glyph{width:16px;text-align:center;font-size:13px}
@@ -234,12 +236,12 @@ button{cursor:pointer}
     <aside class="sidebar">
       <div class="side-head"><span>文件夹</span><button id="btn-new-folder" title="新建文件夹">＋</button></div>
       <div class="tree" id="tree"></div>
-      <div class="side-note">「常用」固定在第二位；一级入口「网页链接」不可删除。</div>
+      <div class="side-note">「常用」固定在「网页链接」内第一位；「网页链接」不可删除；顶层其他文件夹可改名、删除。</div>
     </aside>
 
     <section class="content">
       <div class="content-head">
-        <div class="content-title"><h1 id="folder-title">网页链接</h1><span class="meta" id="folder-meta"></span></div>
+        <div class="content-title"><h1 id="folder-title">网页链接</h1><span class="meta" id="folder-meta"></span><span style="flex:1"></span><button class="btn sm" id="btn-new-item">＋ 新建条目</button></div>
         <div class="bulk" id="bulk">
           <span id="bulk-count"></span>
           <select id="bulk-target" title="批量移动到文件夹"></select>
@@ -253,7 +255,7 @@ button{cursor:pointer}
         <div class="empty-glyph">◌</div>
         <h2>这个文件夹还没有条目</h2>
         <p>从其他文件夹移动条目进来，或新建一条链接。</p>
-        <button class="btn" id="btn-new-item">新建条目</button>
+        <button class="btn" id="btn-new-item-empty">新建条目</button>
       </div>
       <div class="statusbar" id="status"><span class="dot"></span><span id="status-text"></span><span class="spacer"></span><span id="status-right"></span></div>
     </section>
@@ -286,6 +288,7 @@ const ICON_KINDS = ["auto","block","transparent","emoji"];
 const state = {
   items: [], folders: [ROOT, COMMON], selectedFolder: ROOT, selectedIds: new Set(),
   editingId: null, dirty: false, query: "", saving: false, token: "", folderOrderDirty: false,
+  bulkTarget: "", newIdSeq: 0,
 };
 
 /* ---------- 小工具 ---------- */
@@ -298,6 +301,14 @@ function normalizeFolder(raw){
   const s = String(raw || "").replace(/\r/g," ").replace(/\n/g," ").trim();
   if (!s) return "";
   return s.split("/").map(x => x.trim()).filter(Boolean).join("/");
+}
+function folderValidationError(folder){
+  const name = normalizeFolder(folder);
+  if (!name) return "文件夹名称不能为空";
+  if (name.length > 256) return "文件夹总长度不能超过 256 个字符";
+  if (name.split("/").some(part => part.length > 64)) return "文件夹每段名称不能超过 64 个字符";
+  if (/[\u0000-\u001f\u007f]/.test(name)) return "文件夹名不能包含控制字符";
+  return "";
 }
 function toast(msg){
   const t = $("toast"); t.textContent = msg; t.classList.add("on");
@@ -363,6 +374,7 @@ function importCsvFile(file){
       const map = headerIndex(rows[0] || []);
       if (!map){ throw new Error("CSV 表头无法识别"); }
       const items = [];
+      let invalidFolders = 0;
       for (let r = 1; r < rows.length; r++){
         const row = rows[r];
         if (!row || row.join("").trim() === "") continue;
@@ -370,9 +382,9 @@ function importCsvFile(file){
         const type = (get("type") || "url").toLowerCase();
         if (!["url","file","folder"].includes(type)) continue;
         const target = get("target"); if (!target) continue;
-        let folder = normalizeFolder(get("folder"));
-        if (!folder) folder = COMMON;
-        else if (!folder.startsWith(ROOT + "/") && folder !== ROOT) folder = ROOT + "/" + folder;
+        // folder 为空 = 未分类（网页链接 外）；非空按完整路径处理，顶层文件夹也允许。
+        const folder = normalizeFolder(get("folder"));
+        if (folder && folderValidationError(folder)){ invalidFolders++; continue; }
         const icon = ICON_KINDS.includes(get("icon").toLowerCase()) ? get("icon").toLowerCase() : "auto";
         items.push({
           id: "", type, target, title: get("title") || target,
@@ -381,10 +393,10 @@ function importCsvFile(file){
         });
         ensureFolderChain(folder);
       }
-      if (!items.length){ throw new Error("没有可导入的条目"); }
+      if (!items.length){ throw new Error("没有可导入的条目" + (invalidFolders ? `（跳过 ${invalidFolders} 条 folder 非法）` : "")); }
       state.items = items; state.selectedIds.clear(); state.editingId = null;
       state.selectedFolder = ROOT; state.dirty = true;
-      renderAll(); toast("已导入 " + items.length + " 条，记得点「保存到插件」");
+      renderAll(); toast("已导入 " + items.length + " 条" + (invalidFolders ? `，跳过 ${invalidFolders} 条 folder 非法` : "") + "，记得点「保存到插件」");
     } catch (err){ toast("CSV 导入失败：" + err.message); }
   };
   reader.readAsText(file, "utf-8");
@@ -406,13 +418,28 @@ function ensureFolderChain(path){
 function rootChildren(){
   return state.folders.filter(f => f.startsWith(ROOT + "/") && !f.slice(ROOT.length+1).includes("/"));
 }
+function topFolders(){
+  return state.folders.filter(f => !f.includes("/"));
+}
+function parentPath(path){
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.slice(0, i);
+}
+function childFolders(parent){
+  return state.folders.filter(f => parentPath(f) === parent);
+}
+function unsortedCount(){
+  return state.items.filter(it => !it.folder).length;
+}
 function countInTree(path){
   return state.items.filter(it => isUnder(it.folder, path)).length;
 }
 function currentItems(){
   const base = state.selectedFolder === ROOT
     ? state.items
-    : state.items.filter(it => it.folder === state.selectedFolder);
+    : state.selectedFolder === ""
+      ? state.items.filter(it => !it.folder)
+      : state.items.filter(it => it.folder === state.selectedFolder);
   const q = state.query.trim().toLowerCase();
   if (!q) return base;
   return base.filter(it => [it.title,it.target,it.alias,it.tags,it.folder,it.emoji]
@@ -422,38 +449,66 @@ function currentItems(){
 /* ---------- 渲染：侧栏 ---------- */
 function renderTree(){
   const tree = $("tree"); tree.textContent = "";
-  const rootRow = el("div","tree-row root" + (state.selectedFolder === ROOT ? " selected" : ""));
-  rootRow.append(el("span","glyph","▤"), el("span","name",ROOT), el("span","count",String(state.items.length)));
-  rootRow.onclick = () => { state.selectedFolder = ROOT; state.selectedIds.clear(); renderAll(); };
-  tree.append(rootRow);
 
-  rootChildren().forEach((path, idx) => {
-    const row = el("div","tree-row" + (state.selectedFolder === path ? " selected" : ""));
-    const pinned = path === COMMON;
-    if (pinned) row.classList.add("pinned");
-    row.append(el("span","glyph", pinned ? "★" : "▸"));
-    row.append(el("span","name", folderName(path)));
-    row.append(el("span","count", String(countInTree(path))));
+  // 「网页链接」外面的散项：folder 为空，不归属任何文件夹。
+  const loose = el("div","tree-row toplevel" + (state.selectedFolder === "" ? " selected" : ""));
+  loose.append(el("span","glyph","○"), el("span","name","未分类（网页链接 外）"), el("span","count",String(unsortedCount())));
+  loose.onclick = () => { state.selectedFolder = ""; state.selectedIds.clear(); renderAll(); };
+  tree.append(loose);
 
-    const tools = el("div","tools");
-    if (idx > 0){
-      const up = el("button","tiny-btn","↑"); up.title = "上移";
-      up.disabled = idx === 1; up.onclick = (e) => { e.stopPropagation(); moveFolder(path,-1); };
-      const down = el("button","tiny-btn","↓"); down.title = "下移";
-      down.disabled = idx === rootChildren().length - 1;
-      down.onclick = (e) => { e.stopPropagation(); moveFolder(path,1); };
-      tools.append(up, down);
+  const renderChildren = (parent, depth, rootBranch) => {
+    childFolders(parent).forEach((path) => {
+      const pinned = path === COMMON;
+      const row = el("div","tree-row child" + (state.selectedFolder === path ? " selected" : ""));
+      row.style.paddingLeft = (14 + (depth - 2) * 16) + "px";
+      if (pinned) row.classList.add("pinned");
+      row.append(el("span","glyph", pinned ? "★" : "·"));
+      row.append(el("span","name", folderName(path)));
+      row.append(el("span","count", String(countInTree(path))));
+
+      const tools = el("div","tools");
+      if (rootBranch && parent === ROOT && !pinned){
+        const siblings = rootChildren();
+        const idx = siblings.indexOf(path);
+        const up = el("button","tiny-btn","↑"); up.title = "上移";
+        up.disabled = idx === 1; up.onclick = (e) => { e.stopPropagation(); moveFolder(path,-1); };
+        const down = el("button","tiny-btn","↓"); down.title = "下移";
+        down.disabled = idx === siblings.length - 1;
+        down.onclick = (e) => { e.stopPropagation(); moveFolder(path,1); };
+        tools.append(up, down);
+      }
+      const rename = el("button","tiny-btn","✎"); rename.title = "重命名";
+      rename.disabled = pinned;
+      rename.onclick = (e) => { e.stopPropagation(); openRenameFolder(path); };
+      const del = el("button","tiny-btn","⌫"); del.title = "删除";
+      del.disabled = pinned;
+      del.onclick = (e) => { e.stopPropagation(); openDeleteFolder(path); };
+      tools.append(rename, del);
+      row.append(tools);
+      row.onclick = () => { state.selectedFolder = path; state.selectedIds.clear(); renderAll(); };
+      tree.append(row);
+      renderChildren(path, depth + 1, rootBranch);
+    });
+  };
+
+  topFolders().forEach((top) => {
+    const isRoot = top === ROOT;
+    const topRow = el("div","tree-row toplevel" + (isRoot ? " root" : "") + (state.selectedFolder === top ? " selected" : ""));
+    topRow.append(el("span","glyph", isRoot ? "▤" : "▸"));
+    topRow.append(el("span","name", top));
+    topRow.append(el("span","count", String(countInTree(top))));
+    if (!isRoot){
+      const tools = el("div","tools");
+      const rename = el("button","tiny-btn","✎"); rename.title = "重命名";
+      rename.onclick = (e) => { e.stopPropagation(); openRenameFolder(top); };
+      const del = el("button","tiny-btn","⌫"); del.title = "删除";
+      del.onclick = (e) => { e.stopPropagation(); openDeleteFolder(top); };
+      tools.append(rename, del);
+      topRow.append(tools);
     }
-    const rename = el("button","tiny-btn","✎"); rename.title = "重命名";
-    rename.disabled = pinned;
-    rename.onclick = (e) => { e.stopPropagation(); openRenameFolder(path); };
-    const del = el("button","tiny-btn","⌫"); del.title = "删除";
-    del.disabled = pinned;
-    del.onclick = (e) => { e.stopPropagation(); openDeleteFolder(path); };
-    tools.append(rename, del);
-    row.append(tools);
-    row.onclick = () => { state.selectedFolder = path; state.selectedIds.clear(); renderAll(); };
-    tree.append(row);
+    topRow.onclick = () => { state.selectedFolder = top; state.selectedIds.clear(); renderAll(); };
+    tree.append(topRow);
+    renderChildren(top, 2, isRoot);
   });
 }
 
@@ -478,13 +533,33 @@ function initial(item){ return Array.from(item.title || "?")[0] || "?"; }
 function renderList(){
   const list = $("list"); list.textContent = "";
   const items = currentItems();
-  $("folder-title").textContent = state.query ? "搜索结果" : (state.selectedFolder === ROOT ? ROOT : folderName(state.selectedFolder));
-  const total = state.selectedFolder === ROOT ? state.items.length : countInTree(state.selectedFolder);
+  const title = state.query
+    ? "搜索结果"
+    : state.selectedFolder === ROOT
+      ? ROOT
+      : state.selectedFolder === ""
+        ? "未分类（网页链接 外）"
+        : folderName(state.selectedFolder);
+  $("folder-title").textContent = title;
+  const total = state.selectedFolder === ROOT
+    ? state.items.length
+    : state.selectedFolder === ""
+      ? unsortedCount()
+      : countInTree(state.selectedFolder);
   $("folder-meta").textContent = state.query
     ? items.length + " 条匹配 / 共 " + total + " 条"
-    : (state.selectedFolder === ROOT ? total + " 条（含所有子文件夹）" : total + " 条");
+    : state.selectedFolder === ROOT
+      ? total + " 条（含所有子文件夹）"
+      : total + " 条";
 
   const empty = $("empty"); empty.classList.toggle("on", items.length === 0);
+  if (!items.length){
+    const searching = state.query.trim().length > 0;
+    empty.querySelector("h2").textContent = searching ? "没有匹配的条目" : "这个文件夹还没有条目";
+    empty.querySelector("p").textContent = searching
+      ? "换个关键词，或清空搜索框。"
+      : "从其他文件夹移动条目进来，或新建一条链接。";
+  }
   if (!items.length){ list.style.display = "none"; } else { list.style.display = ""; }
 
   items.forEach(item => {
@@ -492,6 +567,8 @@ function renderList(){
     const cb = el("input"); cb.type = "checkbox"; cb.checked = item.id ? state.selectedIds.has(item.id) : false;
     cb.disabled = !item.id;
     cb.onchange = () => { if (cb.checked) state.selectedIds.add(item.id); else state.selectedIds.delete(item.id); renderBulk(); };
+    // 勾选框不触发整行的「选中并重绘」：否则勾选后 renderAll 会把复选框重建，change 丢失，表现为勾不上。
+    cb.onclick = (e) => { e.stopPropagation(); };
     row.append(cb, iconNode(item));
 
     const main = el("div","item-main");
@@ -525,7 +602,13 @@ function renderBulk(){
   $("bulk").classList.toggle("on", on);
   $("bulk-count").textContent = "已选 " + state.selectedIds.size + " 条";
   const sel = $("bulk-target"); sel.textContent = "";
-  rootChildren().forEach(path => { const o = el("option","",folderName(path)); o.value = path; sel.append(o); });
+  const none = el("option","","（未分类 / 网页链接 外）"); none.value = ""; sel.append(none);
+  state.folders.forEach(path => { const o = el("option","",path); o.value = path; sel.append(o); });
+  // 勾选变化会重建批量栏；保留用户已选的目标，避免每次勾选都退回「未分类」。
+  const keep = state.bulkTarget === "" || state.folders.includes(state.bulkTarget) ? state.bulkTarget : "";
+  sel.value = keep;
+  state.bulkTarget = keep;
+  sel.onchange = () => { state.bulkTarget = sel.value; };
 }
 
 /* ---------- 渲染：检查器 ---------- */
@@ -568,7 +651,9 @@ function renderInspector(){
   mk("标题", "title", { placeholder:"显示名称" });
   mk("目标", "target", { placeholder:"https://… / 本地路径", hint:"修改网址会参与保存时的去重校验。" });
   mk("类型", "type", { options:[["url","网址"],["file","文件"],["folder","本地文件夹"]] });
-  const folderSel = mk("文件夹", "folder", { options: rootChildren().map(p => [p, folderName(p)]) });
+  const folderOptions = [["", "（未分类 / 网页链接 外）"], ...state.folders.map(p => [p, p])];
+  if (item.folder && !folderOptions.some(([v]) => v === item.folder)) folderOptions.push([item.folder, item.folder]);
+  const folderSel = mk("文件夹", "folder", { options: folderOptions });
   folderSel.onchange = () => { item.folder = folderSel.value; state.dirty = true; renderStatus(); };
 
   const g = el("div","grid2");
@@ -603,7 +688,7 @@ function renderStatus(){
   const bar = $("status");
   bar.classList.toggle("dirty", state.dirty);
   $("status-text").textContent = state.dirty ? "有未保存的修改" : "已与插件同步";
-  $("status-right").textContent = state.items.length + " 条 · " + rootChildren().length + " 个二级文件夹";
+  $("status-right").textContent = state.items.length + " 条 · " + state.folders.length + " 个文件夹";
   $("btn-save").disabled = !state.dirty || state.saving;
 }
 function renderAll(){ renderTree(); renderList(); renderInspector(); renderStatus(); }
@@ -626,7 +711,7 @@ async function loadLibrary(){
   state.items = (data.items || []).map(it => ({
     id: it.id || "", type: it.type || "url", target: it.target || "", title: it.title || "",
     alias: it.alias || "", tags: it.tags || "", emoji: it.emoji || "", color: it.color || "",
-    iconKind: it.iconKind || "auto", folder: normalizeFolder(it.folder) || COMMON, iconSrc: it.iconSrc || "",
+    iconKind: it.iconKind || "auto", folder: normalizeFolder(it.folder), iconSrc: it.iconSrc || "",
   }));
   state.folders = (data.folders || []).map(normalizeFolder).filter(Boolean);
   ensureFolderChain(ROOT); ensureFolderChain(COMMON);
@@ -647,8 +732,13 @@ async function save(){
   if (state.saving) return;
   state.saving = true; renderStatus();
   try {
+    const folders = [];
+    state.folders.forEach(f => {
+      const name = normalizeFolder(f);
+      if (name && !folders.includes(name)) folders.push(name);
+    });
     const payload = {
-      folders: [ROOT, COMMON, ...rootChildren().filter(f => f !== COMMON)],
+      folders,
       items: state.items.map(it => ({
         id: it.id || null, type: it.type, target: it.target, title: it.title,
         alias: it.alias, tags: it.tags, emoji: it.emoji, color: it.color,
@@ -704,18 +794,48 @@ function closeModal(){ $("modal-root").classList.remove("on"); }
 
 function openNewFolder(){
   const input = el("input",""); input.placeholder = "例如「工作」「学习」";
-  input.style.width = "100%"; input.style.border = "1px solid var(--line-strong)";
-  input.style.borderRadius = "8px"; input.style.padding = "7px 9px"; input.style.background = "var(--surface-2)";
-  openModal("新建文件夹", "新文件夹位于「" + ROOT + "」下。", input, [
+  const loc = el("select");
+  const options = [];
+  if (state.selectedFolder && state.selectedFolder !== ROOT){
+    options.push(["current", "当前文件夹（" + folderName(state.selectedFolder) + "）内"]);
+  }
+  options.push(["root","「网页链接」内"],["top","顶层（网页链接 外）"]);
+  options.forEach(([v,t]) => { const o = el("option","",t); o.value = v; loc.append(o); });
+  const topLevelSelected = state.selectedFolder && state.selectedFolder !== ROOT && !isUnder(state.selectedFolder, ROOT);
+  loc.value = options.some(([v]) => v === "current") ? "current" : (topLevelSelected ? "top" : "root");
+
+  const wrap = el("div");
+  wrap.style.display = "grid"; wrap.style.gap = "8px";
+  [input, loc].forEach(node => {
+    node.style.width = "100%"; node.style.border = "1px solid var(--line-strong)";
+    node.style.borderRadius = "8px"; node.style.padding = "7px 9px"; node.style.background = "var(--surface-2)";
+    wrap.append(node);
+  });
+  wrap.append(el("span","hint","位置可选当前文件夹、网页链接内或顶层；名称含 / 时按完整路径创建。"));
+
+  openModal("新建文件夹", "可建在当前文件夹、网页链接内或顶层（网页链接 外）。", wrap, [
     { label:"取消", onClick: closeModal },
     { label:"创建", primary:true, onClick: () => {
       const name = normalizeFolder(input.value);
-      if (!name){ toast("请输入文件夹名称"); return; }
-      const path = ROOT + "/" + name;
-      if (state.folders.some(f => f === path)){ toast("文件夹已存在"); return; }
+      const error = folderValidationError(name);
+      if (error){ toast(error); return; }
+      let path;
+      if (loc.value === "current" && state.selectedFolder){
+        path = name === state.selectedFolder || name.startsWith(state.selectedFolder + "/")
+          ? name
+          : state.selectedFolder + "/" + name;
+      } else if (loc.value === "top" || name === ROOT || name.startsWith(ROOT + "/")){
+        path = name;
+      } else {
+        path = ROOT + "/" + name;
+      }
+      if (path.length > 256){ toast("文件夹总长度不能超过 256 个字符"); return; }
+      if (path === ROOT){ toast("「网页链接」已存在"); return; }
+      if (path === COMMON){ toast("「常用」已存在"); return; }
+      if (state.folders.some(f => f.toLowerCase() === path.toLowerCase())){ toast("文件夹已存在"); return; }
       ensureFolderChain(path);
-      state.folders = [ROOT, COMMON, ...state.folders.filter(f => f !== ROOT && f !== COMMON)];
-      state.dirty = true; closeModal(); renderAll(); toast("已创建「" + name + "」，保存后生效");
+      sortFolders();
+      state.dirty = true; closeModal(); renderAll(); toast("已创建「" + path + "」，保存后生效");
     }},
   ]);
   setTimeout(() => input.focus(), 50);
@@ -728,9 +848,14 @@ function openRenameFolder(path){
     { label:"取消", onClick: closeModal },
     { label:"保存", primary:true, onClick: () => {
       const name = normalizeFolder(input.value);
-      if (!name){ toast("名称不能为空"); return; }
-      const newPath = ROOT + "/" + name;
-      if (state.folders.some(f => f !== path && f === newPath)){ toast("同名文件夹已存在"); return; }
+      const error = folderValidationError(name);
+      if (error){ toast(error); return; }
+      if (path === ROOT){ toast("「网页链接」不可重命名"); return; }
+      if (name.includes("/")){ toast("名称不能包含 /"); return; }
+      const parent = parentPath(path);
+      const newPath = parent ? parent + "/" + name : name;
+      if (newPath.length > 256){ toast("文件夹总长度不能超过 256 个字符"); return; }
+      if (state.folders.some(f => f.toLowerCase() !== path.toLowerCase() && f.toLowerCase() === newPath.toLowerCase())){ toast("同名文件夹已存在"); return; }
       state.folders = state.folders.map(f => f === path ? newPath : (f.startsWith(path + "/") ? newPath + f.slice(path.length) : f));
       state.items.forEach(it => {
         if (it.folder === path) it.folder = newPath;
@@ -743,23 +868,32 @@ function openRenameFolder(path){
   setTimeout(() => { input.focus(); input.select(); }, 50);
 }
 function openDeleteFolder(path){
+  if (path === ROOT){ toast("「网页链接」不可删除"); return; }
+  if (childFolders(path).length > 0){ toast("该文件夹含子文件夹，请先删除子文件夹"); return; }
   const affected = countInTree(path);
-  openModal("删除文件夹", "「" + folderName(path) + "」中的 " + affected + " 条条目会移动到「常用」，条目不会被删除。",
+  const destination = path.startsWith(ROOT + "/") ? COMMON : "";
+  const destText = destination ? "「常用」" : "未分类（网页链接 外）";
+  openModal("删除文件夹", "「" + folderName(path) + "」中的 " + affected + " 条条目会移动到" + destText + "，条目不会被删除。",
     null, [
       { label:"取消", onClick: closeModal },
       { label:"确认删除", danger:true, onClick: () => {
         state.items.forEach(it => {
-          if (isUnder(it.folder, path)) it.folder = COMMON;
+          if (isUnder(it.folder, path)) it.folder = destination;
         });
         state.folders = state.folders.filter(f => !isUnder(f, path));
-        if (state.selectedFolder === path) state.selectedFolder = ROOT;
-        state.dirty = true; closeModal(); renderAll(); toast("已删除，条目已移到「常用」，保存后生效");
+        if (state.selectedFolder === path) state.selectedFolder = destination;
+        state.dirty = true; closeModal(); renderAll(); toast("已删除，条目已移到" + destText + "，保存后生效");
       }},
     ]);
 }
 
 function bind(){
-  $("search").addEventListener("input", e => { state.query = e.target.value; renderList(); });
+  $("search").addEventListener("input", e => {
+    state.query = e.target.value;
+    // 搜索会隐藏部分条目；清掉选择，避免批量操作作用到看不见的行。
+    state.selectedIds.clear();
+    renderList();
+  });
   $("btn-new-folder").onclick = openNewFolder;
   $("btn-save").onclick = save;
   $("btn-export-csv").onclick = exportCsv;
@@ -768,18 +902,20 @@ function bind(){
     input.onchange = () => { if (input.files && input.files[0]) importCsvFile(input.files[0]); };
     input.click();
   };
-  $("btn-new-item").onclick = () => {
-    const id = "new-" + Date.now();
+  const newItem = () => {
+    // 临时 id 只用于前端定位；加序号避免同一毫秒连续新建两条时撞 id。
+    const id = "new-" + Date.now() + "-" + (++state.newIdSeq);
     state.items.unshift({ id, type:"url", target:"", title:"", alias:"", tags:"", emoji:"", color:"",
       iconKind:"auto", folder: state.selectedFolder === ROOT ? COMMON : state.selectedFolder, iconSrc:"" });
     state.editingId = id; state.dirty = true; renderAll(); toast("新条目已加入列表，填写后点保存");
   };
+  $("btn-new-item").onclick = newItem;
+  $("btn-new-item-empty").onclick = newItem;
   $("btn-apply").onclick = () => {
     const item = state.items.find(x => x.id === state.editingId);
     if (!item) return;
     if (!String(item.target || "").trim()){ toast("目标不能为空"); return; }
     if (!item.title) item.title = item.target;
-    if (!String(item.folder || "")){ item.folder = COMMON; }
     ensureFolderChain(item.folder);
     state.dirty = true; renderAll(); toast("已应用到列表");
   };
