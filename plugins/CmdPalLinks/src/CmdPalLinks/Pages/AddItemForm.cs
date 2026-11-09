@@ -11,10 +11,10 @@ internal sealed partial class AddItemForm : FormContent
 {
     private readonly LibraryStore _store;
 
-    public AddItemForm(LibraryStore store)
+    public AddItemForm(LibraryStore store, string folder = "")
     {
         _store = store;
-        TemplateJson = ItemFormTemplate.Build("url", string.Empty, string.Empty, string.Empty, string.Empty);
+        TemplateJson = ItemFormTemplate.Build("url", string.Empty, string.Empty, string.Empty, string.Empty, folder);
     }
 
     public event Action? Added;

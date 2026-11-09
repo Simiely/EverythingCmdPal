@@ -37,7 +37,7 @@ internal sealed partial class FolderItemsPage : DynamicListPage
         Title = LibraryStore.FolderLeaf(folder);
         Name = "打开文件夹";
         PlaceholderText = "在此文件夹内搜索…";
-        EmptyContent = new CommandItem(new AddItemPage(store))
+        EmptyContent = new CommandItem(new AddItemPage(store, folder))
         {
             Title = "此文件夹为空",
             Subtitle = "点此添加条目，或从链接库把条目移进来",
@@ -105,6 +105,18 @@ internal sealed partial class FolderItemsPage : DynamicListPage
             rows.Add(ItemsPage.BuildItemRow(item, _store, _settings, _icons, _importPage, out _));
         }
 
+        // 任意文件夹（含「网页链接」外的顶层文件夹）都能直接加条目，默认就落在当前层。
+        // 只有空文件夹且无子文件夹时保留 EmptyContent 的「此文件夹为空」提示，避免只剩一行添加入口。
+        if (string.IsNullOrWhiteSpace(_query) && rows.Count > 0)
+        {
+            rows.Add(new ListItem(new AddItemPage(_store, _folder))
+            {
+                Title = "添加到此文件夹",
+                Subtitle = $"保存到「{LibraryStore.FolderLeaf(_folder)}」，也可改文件夹字段",
+                Icon = Icons.Add,
+            });
+        }
+
         _items = rows.ToArray();
         HostLog.Info($"folder page '{_folder}' q='{_query}' rows={_items.Length} took={started.Elapsed.TotalMilliseconds:F2} ms");
         return _items;
@@ -141,15 +153,19 @@ internal sealed partial class FolderCreateForm : FormContent
     {
         _store = store;
         _created = created;
-        TemplateJson = FolderFormTemplate.Build("新建文件夹", "文件夹名称", string.Empty, "创建");
+        TemplateJson = FolderFormTemplate.Build("新建文件夹", "文件夹名称", string.Empty, "创建", withLocation: true);
     }
 
     public override ICommandResult SubmitForm(string payload)
     {
         var root = JsonNode.Parse(payload) as JsonObject;
         var name = LibraryStore.NormalizeFolderName(AddItemForm.Text(root ?? new JsonObject(), "name"));
-        // 两级结构：只输入名称时默认建在「网页链接」之下，避免首页出现第二个一级文件夹。
-        if (name.Length > 0 && !name.Contains('/') && _store.Folders.Any(folder => folder.StartsWith(LibraryStore.RootFolder, StringComparison.OrdinalIgnoreCase)))
+        var location = AddItemForm.Text(root ?? new JsonObject(), "location");
+        // 默认仍建在「网页链接」之下；选「顶层」时才与它同级，名称含 / 时按完整路径处理。
+        if (name.Length > 0
+            && !name.Contains('/')
+            && !string.Equals(location, "top", StringComparison.OrdinalIgnoreCase)
+            && _store.Folders.Any(folder => folder.StartsWith(LibraryStore.RootFolder, StringComparison.OrdinalIgnoreCase)))
         {
             name = LibraryStore.RootFolder + "/" + name;
         }
@@ -246,8 +262,10 @@ internal sealed partial class FolderDeleteForm : FormContent
     {
         _store = store;
         _folder = folder;
-        var count = store.ItemsInFolder(folder).Count;
-        TemplateJson = FolderFormTemplate.BuildDelete(folder, count);
+        // 删除前展示整棵子树的条数；若有子文件夹，Store 会拒绝，提示先删子文件夹。
+        var count = store.CountInTree(folder);
+        var hasChildren = store.Folders.Any(name => name.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase));
+        TemplateJson = FolderFormTemplate.BuildDelete(folder, count, hasChildren);
     }
 
     public override ICommandResult SubmitForm(string payload)
@@ -357,47 +375,80 @@ internal sealed partial class MoveToFolderCommand : InvokableCommand
 
 internal static class FolderFormTemplate
 {
-    public static string Build(string title, string label, string value, string submit)
+    public static string Build(string title, string label, string value, string submit, bool withLocation = false)
     {
+        var body = new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "TextBlock",
+                ["text"] = title,
+                ["weight"] = "Bolder",
+                ["wrap"] = true,
+            },
+        };
+
+        if (withLocation)
+        {
+            body.Add(new JsonObject
+            {
+                ["type"] = "Input.ChoiceSet",
+                ["id"] = "location",
+                ["label"] = "位置",
+                ["value"] = "root",
+                ["choices"] = new JsonArray
+                {
+                    new JsonObject { ["title"] = "「网页链接」内", ["value"] = "root" },
+                    new JsonObject { ["title"] = "顶层（「网页链接」外）", ["value"] = "top" },
+                },
+            });
+        }
+
+        body.Add(new JsonObject
+        {
+            ["type"] = "Input.Text",
+            ["id"] = "name",
+            ["label"] = label,
+            ["value"] = value,
+            ["isRequired"] = true,
+            ["errorMessage"] = "请填写文件夹名称",
+            ["placeholder"] = "例如：工作、学习、工具",
+        });
+
+        var data = new JsonObject { ["name"] = "name" };
+        if (withLocation)
+        {
+            data["location"] = "location";
+        }
+
         return new JsonObject
         {
             ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
             ["type"] = "AdaptiveCard",
             ["version"] = "1.5",
-            ["body"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = title,
-                    ["weight"] = "Bolder",
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "Input.Text",
-                    ["id"] = "name",
-                    ["label"] = label,
-                    ["value"] = value,
-                    ["isRequired"] = true,
-                    ["errorMessage"] = "请填写文件夹名称",
-                    ["placeholder"] = "例如：工作、学习、工具",
-                },
-            },
+            ["body"] = body,
             ["actions"] = new JsonArray
             {
                 new JsonObject
                 {
                     ["type"] = "Action.Submit",
                     ["title"] = submit,
-                    ["data"] = new JsonObject { ["name"] = "name" },
+                    ["data"] = data,
                 },
             },
         }.ToJsonString();
     }
 
-    public static string BuildDelete(string folder, int count)
+    public static string BuildDelete(string folder, int count, bool hasChildren = false)
     {
+        var detail = hasChildren
+            ? "该文件夹含子文件夹，需先删除子文件夹后才能删除。"
+            : count == 0
+                ? "该文件夹为空，删除后不会影响任何条目。"
+                : folder.StartsWith(LibraryStore.RootFolder + "/", StringComparison.OrdinalIgnoreCase)
+                    ? $"该文件夹下有 {count} 条条目，删除后会全部移入「常用」，不会删除条目。"
+                    : $"该文件夹下有 {count} 条条目，删除后会全部移回「未分类」，不会删除条目。";
+
         return new JsonObject
         {
             ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -415,11 +466,7 @@ internal static class FolderFormTemplate
                 new JsonObject
                 {
                     ["type"] = "TextBlock",
-                    ["text"] = count == 0
-                        ? "该文件夹为空，删除后不会影响任何条目。"
-                        : folder.StartsWith(LibraryStore.RootFolder + "/", StringComparison.OrdinalIgnoreCase)
-                            ? $"该文件夹下有 {count} 条条目，删除后会全部移入「常用」，不会删除条目。"
-                            : $"该文件夹下有 {count} 条条目，删除后会全部移回「未分类」，不会删除条目。",
+                    ["text"] = detail,
                     ["wrap"] = true,
                 },
             },

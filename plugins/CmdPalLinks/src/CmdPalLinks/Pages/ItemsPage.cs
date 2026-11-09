@@ -202,14 +202,25 @@ internal sealed partial class ItemsPage : DynamicListPage
             rows.Add(row);
         }
 
-        // 「新建文件夹」「批量编辑」固定在列表最后，只在未输入检索词时出现；
-        // 空库时交给 EmptyContent，不追加这些行。导入入口只在行内「更多」里保留。
-        if (count >= _results.Length && _store.Items.Count > 0 && string.IsNullOrWhiteSpace(_query))
+        // 「添加条目」「新建文件夹」「批量编辑」固定在列表最后，只在未输入检索词时出现；
+        // 真正的空库交给 EmptyContent；只要已有文件夹行（哪怕条目为 0）也要给出添加入口。
+        // 导入入口只在行内「更多」里保留。
+        if (count >= _results.Length
+            && (_store.Items.Count > 0 || _store.Folders.Count > 0)
+            && string.IsNullOrWhiteSpace(_query))
         {
+            // 首页是「网页链接」外的一层：这里也要能直接加条目，否则只能进子文件夹操作。
+            rows.Add(new ListItem(new AddItemPage(_store))
+            {
+                Title = "添加条目",
+                Subtitle = "放在「网页链接」外（未分类），也可填写目标文件夹",
+                Icon = Icons.Add,
+            });
+
             rows.Add(new ListItem(new FolderCreatePage(_store))
             {
                 Title = "新建文件夹",
-                Subtitle = "把条目分组；文件夹可改名、删除",
+                Subtitle = "可建在顶层（网页链接 外）或「网页链接」内",
                 Icon = Icons.FolderAdd,
             });
 
@@ -259,12 +270,15 @@ internal sealed partial class ItemsPage : DynamicListPage
 
     internal static IContextItem[] BuildFolderCommands(LibraryStore store, string folder)
     {
-        // 「常用」名称与位置固定，不提供重命名 / 删除入口。
-        if (string.Equals(folder, LibraryStore.CommonFolder, StringComparison.OrdinalIgnoreCase))
+        // 「常用」名称与位置固定；「网页链接」是一级入口，也不提供改名 / 删除，
+        // 与编辑器侧栏「网页链接不可删除」保持一致，避免把整库归属连根拔掉。
+        if (string.Equals(folder, LibraryStore.CommonFolder, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(folder, LibraryStore.RootFolder, StringComparison.OrdinalIgnoreCase))
         {
             return [];
         }
 
+        var hasChildren = store.Folders.Any(name => name.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase));
         return new IContextItem[]
         {
             new CommandContextItem(new FolderRenamePage(store, folder))
@@ -275,9 +289,11 @@ internal sealed partial class ItemsPage : DynamicListPage
             new CommandContextItem(new FolderDeletePage(store, folder))
             {
                 Title = "删除文件夹",
-                Subtitle = folder.StartsWith(LibraryStore.RootFolder + "/", StringComparison.OrdinalIgnoreCase)
-                    ? "条目会移入「常用」，不会删除条目"
-                    : "条目会被移回未分类，不会删除条目",
+                Subtitle = hasChildren
+                    ? "含子文件夹，需先删除子文件夹"
+                    : folder.StartsWith(LibraryStore.RootFolder + "/", StringComparison.OrdinalIgnoreCase)
+                        ? "条目会移入「常用」，不会删除条目"
+                        : "条目会被移回未分类，不会删除条目",
                 Icon = Icons.Delete,
                 IsCritical = true,
             },

@@ -9,12 +9,12 @@ internal sealed partial class AddItemPage : ContentPage
 {
     private readonly AddItemForm _form;
 
-    public AddItemPage(LibraryStore store)
+    public AddItemPage(LibraryStore store, string folder = "")
     {
         Icon = Icons.Add;
         Title = "添加条目";
         Name = "添加条目";
-        _form = new AddItemForm(store);
+        _form = new AddItemForm(store, folder);
         _form.Added += () => Added?.Invoke();
     }
 
