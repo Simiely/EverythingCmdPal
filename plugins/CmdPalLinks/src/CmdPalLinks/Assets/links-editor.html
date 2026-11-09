@@ -227,8 +227,8 @@ button{cursor:pointer}
       <span class="glyph">⌕</span>
       <input id="search" type="search" placeholder="搜索标题、网址、标签或文件夹…" autocomplete="off">
     </div>
-    <button class="btn" id="btn-import-csv" title="从 CSV 导入（会替换当前列表）">导入 CSV</button>
-    <button class="btn" id="btn-export-csv" title="导出全部条目为 CSV">导出 CSV</button>
+    <button class="btn" id="btn-import-json" title="从 JSON 导入（会替换当前列表，保存后生效）">导入 JSON</button>
+    <button class="btn" id="btn-export-json" title="导出全部条目与文件夹为 JSON">导出 JSON</button>
     <button class="btn primary" id="btn-save" disabled>保存到插件</button>
   </header>
 
@@ -279,11 +279,6 @@ button{cursor:pointer}
 /* ---------- 常量与状态 ---------- */
 const ROOT = "网页链接";
 const COMMON = ROOT + "/常用";
-const CSV_HEADER = ["type","target","title","alias","tags","emoji","color","icon","folder","iconSrc"];
-const LEGACY_HEADERS = [
-  ["type","target","title","alias","tags","emoji","color","icon"],
-  ["type","target","title","alias","tags","emoji","color"]
-];
 const ICON_KINDS = ["auto","block","transparent","emoji"];
 const state = {
   items: [], folders: [ROOT, COMMON], selectedFolder: ROOT, selectedIds: new Set(),
@@ -316,88 +311,116 @@ function toast(msg){
 }
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
-/* ---------- CSV ---------- */
-function csvField(v){
-  const s = String(v == null ? "" : v);
-  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+/* ---------- JSON ---------- */
+function splitList(value){
+  // 编辑器内部用 "|" 分隔；插件 JSON 用字符串数组，两种都能读。
+  if (Array.isArray(value)) return value.map(x => String(x == null ? "" : x).trim()).filter(Boolean);
+  return String(value == null ? "" : value).split("|").map(x => x.trim()).filter(Boolean);
 }
-function parseCsv(text){
-  const rows = []; let row = []; let field = ""; let quoted = false; let i = 0;
-  const s = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
-  while (i < s.length){
-    const ch = s[i];
-    if (quoted){
-      if (ch === '"'){
-        if (s[i+1] === '"'){ field += '"'; i += 2; continue; }
-        quoted = false; i++; continue;
-      }
-      field += ch; i++; continue;
-    }
-    if (ch === '"'){ quoted = true; i++; continue; }
-    if (ch === ','){ row.push(field); field = ""; i++; continue; }
-    if (ch === '\n'){ row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
-    field += ch; i++;
+function pickField(obj, keys){
+  // 兼容编辑器字段（type/alias/color/iconSrc）与插件字段（kind/aliases/iconColor/iconSource），键名忽略大小写。
+  const lower = {};
+  Object.keys(obj).forEach(key => { lower[key.toLowerCase()] = obj[key]; });
+  for (const key of keys){
+    const value = lower[key.toLowerCase()];
+    if (value !== undefined && value !== null) return value;
   }
-  row.push(field);
-  if (row.length > 1 || row[0] !== "") rows.push(row);
-  return rows;
+  return undefined;
 }
-function headerIndex(header){
-  const h = header.map(x => String(x || "").trim().toLowerCase());
-  const first = CSV_HEADER.map(k => h.indexOf(k.toLowerCase()));
-  if (first[0] >= 0) return CSV_HEADER.map((_, idx) => first[idx]);
-  for (const legacy of LEGACY_HEADERS){
-    const pos = legacy.map(k => h.indexOf(k.toLowerCase()));
-    if (pos[0] >= 0){
-      const map = [];
-      for (let i = 0; i < CSV_HEADER.length; i++) map.push(-1);
-      legacy.forEach((k, i) => { map[CSV_HEADER.indexOf(k)] = pos[i]; });
-      return map;
-    }
-  }
-  return null;
-}
-function exportCsv(){
-  const lines = [CSV_HEADER.join(",")];
-  for (const rec of state.items){
-    lines.push(CSV_HEADER.map(k => csvField(k === "icon" ? (rec.iconKind || "auto") : rec[k])).join(","));
-  }
-  const blob = new Blob(["\ufeff" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
-  const a = el("a"); a.href = URL.createObjectURL(blob); a.download = "links.csv"; a.click();
+function exportJson(){
+  const payload = {
+    schemaVersion: 3,
+    updatedAt: new Date().toISOString(),
+    folders: state.folders.slice(),
+    items: state.items.map(it => ({
+      id: it.id || "",
+      kind: it.type,
+      target: it.target,
+      title: it.title,
+      aliases: splitList(it.alias),
+      tags: splitList(it.tags),
+      iconKind: it.iconKind || "auto",
+      iconColor: it.color || "",
+      iconEmoji: it.emoji || "",
+      folder: it.folder || "",
+      iconSource: it.iconSrc || "",
+    })),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json;charset=utf-8"});
+  const a = el("a"); a.href = URL.createObjectURL(blob); a.download = "links.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast("已导出 " + payload.items.length + " 条与 " + payload.folders.length + " 个文件夹");
 }
-function importCsvFile(file){
+function importJsonFile(file){
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const rows = parseCsv(String(reader.result || ""));
-      const map = headerIndex(rows[0] || []);
-      if (!map){ throw new Error("CSV 表头无法识别"); }
-      const items = [];
-      let invalidFolders = 0;
-      for (let r = 1; r < rows.length; r++){
-        const row = rows[r];
-        if (!row || row.join("").trim() === "") continue;
-        const get = (k) => { const idx = map[CSV_HEADER.indexOf(k)]; return idx >= 0 ? (row[idx] || "").trim() : ""; };
-        const type = (get("type") || "url").toLowerCase();
-        if (!["url","file","folder"].includes(type)) continue;
-        const target = get("target"); if (!target) continue;
-        // folder 为空 = 未分类（网页链接 外）；非空按完整路径处理，顶层文件夹也允许。
-        const folder = normalizeFolder(get("folder"));
-        if (folder && folderValidationError(folder)){ invalidFolders++; continue; }
-        const icon = ICON_KINDS.includes(get("icon").toLowerCase()) ? get("icon").toLowerCase() : "auto";
-        items.push({
-          id: "", type, target, title: get("title") || target,
-          alias: get("alias"), tags: get("tags"), emoji: get("emoji"), color: get("color"),
-          iconKind: icon, folder, iconSrc: get("iconSrc"),
-        });
-        ensureFolderChain(folder);
+      const data = JSON.parse(String(reader.result || ""));
+      const rawItems = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
+      if (!rawItems){ throw new Error("缺少 items 数组"); }
+
+      // 文件夹按文件中的顺序保留，缺失的父级自动补全；同名（忽略大小写）只留第一个。
+      const folderList = [];
+      const addFolderChain = (raw) => {
+        const name = normalizeFolder(raw);
+        if (!name) return true;
+        if (folderValidationError(name)) return false;
+        const parts = name.split("/"); let acc = "";
+        for (const part of parts){
+          acc = acc ? acc + "/" + part : part;
+          if (!folderList.some(f => f.toLowerCase() === acc.toLowerCase())) folderList.push(acc);
+        }
+        return true;
+      };
+
+      let badFolders = 0;
+      if (!Array.isArray(data) && Array.isArray(data.folders)){
+        data.folders.forEach(raw => { if (!addFolderChain(raw)) badFolders++; });
       }
-      if (!items.length){ throw new Error("没有可导入的条目" + (invalidFolders ? `（跳过 ${invalidFolders} 条 folder 非法）` : "")); }
-      state.items = items; state.selectedIds.clear(); state.editingId = null;
-      state.selectedFolder = ROOT; state.dirty = true;
-      renderAll(); toast("已导入 " + items.length + " 条" + (invalidFolders ? `，跳过 ${invalidFolders} 条 folder 非法` : "") + "，记得点「保存到插件」");
-    } catch (err){ toast("CSV 导入失败：" + err.message); }
+
+      const items = []; const seen = new Set();
+      let skipped = 0; let duplicated = 0;
+      rawItems.forEach(raw => {
+        if (!raw || typeof raw !== "object"){ skipped++; return; }
+        const type = String(pickField(raw, ["kind","type"]) || "url").trim().toLowerCase();
+        const target = String(pickField(raw, ["target"]) || "").trim();
+        if (!["url","file","folder"].includes(type) || !target){ skipped++; return; }
+        const folder = normalizeFolder(pickField(raw, ["folder"]) || "");
+        if (folder && !addFolderChain(folder)){ skipped++; return; }
+        const key = type + "\n" + target;
+        if (seen.has(key)){ duplicated++; return; }
+        seen.add(key);
+        const icon = String(pickField(raw, ["iconKind","icon"]) || "").trim().toLowerCase();
+        items.push({
+          id: String(pickField(raw, ["id"]) || ""),
+          type, target,
+          title: String(pickField(raw, ["title"]) || "").trim() || target,
+          alias: splitList(pickField(raw, ["aliases","alias"])).join("|"),
+          tags: splitList(pickField(raw, ["tags","tag"])).join("|"),
+          emoji: String(pickField(raw, ["iconEmoji","emoji"]) || "").trim(),
+          color: String(pickField(raw, ["iconColor","color"]) || "").trim(),
+          iconKind: ICON_KINDS.includes(icon) ? icon : "auto",
+          folder,
+          iconSrc: String(pickField(raw, ["iconSource","iconSrc"]) || "").trim(),
+        });
+      });
+
+      if (!items.length){ throw new Error("没有可导入的条目" + (skipped ? `（跳过 ${skipped} 条非法）` : "")); }
+
+      const rest = folderList.filter(f => {
+        const lower = f.toLowerCase();
+        return lower !== ROOT.toLowerCase() && lower !== COMMON.toLowerCase();
+      });
+      state.folders = [ROOT, COMMON, ...rest];
+      state.items = items;
+      state.selectedFolder = ROOT; state.selectedIds.clear(); state.editingId = null;
+      state.dirty = true; renderAll();
+      const notes = [];
+      if (skipped) notes.push(`跳过 ${skipped} 条非法`);
+      if (duplicated) notes.push(`忽略 ${duplicated} 条重复`);
+      if (badFolders) notes.push(`跳过 ${badFolders} 个非法文件夹`);
+      toast("已导入 " + items.length + " 条" + (notes.length ? `，${notes.join("、")}` : "") + "，记得点「保存到插件」");
+    } catch (err){ toast("JSON 导入失败：" + err.message); }
   };
   reader.readAsText(file, "utf-8");
 }
@@ -896,10 +919,10 @@ function bind(){
   });
   $("btn-new-folder").onclick = openNewFolder;
   $("btn-save").onclick = save;
-  $("btn-export-csv").onclick = exportCsv;
-  $("btn-import-csv").onclick = () => {
-    const input = el("input"); input.type = "file"; input.accept = ".csv,text/csv";
-    input.onchange = () => { if (input.files && input.files[0]) importCsvFile(input.files[0]); };
+  $("btn-export-json").onclick = exportJson;
+  $("btn-import-json").onclick = () => {
+    const input = el("input"); input.type = "file"; input.accept = ".json,application/json";
+    input.onchange = () => { if (input.files && input.files[0]) importJsonFile(input.files[0]); };
     input.click();
   };
   const newItem = () => {
