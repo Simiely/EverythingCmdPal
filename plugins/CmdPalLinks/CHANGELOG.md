@@ -2,6 +2,16 @@
 
 格式：`<版本> · <日期>` + 变更点。版本与 `Package.appxmanifest` 的 `Identity Version` 一致。
 
+## 0.1.17.0 · 2026-11-09
+
+- 编辑器工具栏的「导入 CSV / 导出 CSV」替换为「导入 JSON / 导出 JSON」；CSV 解析与导出代码从 `links-editor.html` 移除
+  （插件设置页的 CSV / JSON / TXT 导入与 JSON / CSV 导出不受影响）。
+- JSON 导出写 `schemaVersion`、`updatedAt`、完整 `folders`（含顺序与空文件夹）与条目全字段，并保留条目 `id`；
+  导入兼容编辑器旧字段与插件 JSON 导出 / `links.json`，`id` 命中时保存后仍保留打开统计；重复与非法条目计入提示。
+- 验证（真实 C# 后端 + headless Edge，558 条库副本）：导出 558 条 / 15 文件夹；原样回导再保存后
+  `id` 全保留、`openCount` 合计不变、文件夹顺序与导出文件一致；合成数据导入的文件夹顺序、空文件夹、
+  `emoji/color/iconKind`、别名标签、未分类归属与跳过/重复计数均通过（共 23 项断言）。
+
 ## 0.1.16.0 · 2026-11-09
 
 - 修复编辑器选中「网页链接」时仍把外部条目算进来：`currentItems` 对 ROOT 从「全库」改为 `isUnder(folder, 网页链接)`

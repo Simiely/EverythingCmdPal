@@ -901,9 +901,9 @@ public sealed class LibraryData {
   新建入口带回调，创建后立刻把条目移入。
 - 图标：`Icons.FolderRow` / `Icons.FolderAdd`（Segoe MDL2 字形）。
 
-### 14.4 编辑器与 CSV
+### 14.4 编辑器与 JSON
 
-- 0.1.8.0 整体重做为单文件、离线、macOS 风格的**三分区**：顶部工具栏（品牌 / 搜索 / 导入 CSV / 导出 CSV / 保存到插件）下方
+- 0.1.8.0 整体重做为单文件、离线、macOS 风格的**三分区**：顶部工具栏（品牌 / 搜索 / 导入 JSON / 导出 JSON / 保存到插件）下方
   依次为左侧文件夹树（248px）、中间条目主区、右侧编辑详情（332px），底部状态栏显示同步状态与「N 条 · M 个文件夹」。
   CSS 变量区分浅色 / 深色（`prefers-color-scheme`），统一 12px 圆角、细描边与轻阴影，hover / 选中 / 焦点 / 禁用状态齐全，系统字体栈、无外部 CDN。
 - 打开即请求 GET `/api/links`：返回 `{ok,count,folders,items}`。侧栏顶部是「未分类（网页链接 外）」虚拟行（`folder` 为空），
@@ -915,11 +915,10 @@ public sealed class LibraryData {
   ↑↓ 交换显示顺序仅用于「网页链接」的二级文件夹（只交换 `state.folders` 顺序，不改条目 `folder`）；
   条目支持勾选后批量「移动」（目标含「未分类」）与「设为常用」。改动只写入内存，点「保存到插件」才 POST `{items,folders}`，
   `folders` 提交完整顺序（含顶层与空文件夹），空 `folder` 原样保留、不再强塞进「常用」。
-- CSV 表头：`type,target,title,alias,tags,emoji,color,icon,folder,iconSrc`；旧 8 列（无 folder/iconSrc）与 7 列仍可导入。
-  导出同时写出 folder（完整路径）与 iconSrc，BOM + CRLF；导入时 `folder` 为空 = 未分类（网页链接 外），
-  非空按完整路径处理（顶层文件夹不再被自动补 `网页链接/` 前缀）。
-  0.1.8.0 实测：导出 261 条 → 重新导入仍为 261 条 / 14 个二级文件夹（常用 68），保存后 `links.json` 一致。
-  0.1.9.0 未改 CSV 代码，导出/导入按当时库 562 条，列与规则不变；0.1.10.0 清理后按当前库 558 条导出。
+- 0.1.17.0 起编辑器工具栏改为 JSON：导出 `{schemaVersion,updatedAt,folders,items}`（`kind/target/title/aliases/tags/icon*/folder/iconSource`，
+  保留条目 `id`），完整写入文件夹顺序与空文件夹；导入同时接受编辑器旧字段（`type/alias/color/iconSrc`）、插件 JSON 导出与 `links.json`；
+  `id` 命中时保留打开统计，缺失的父级文件夹自动补全，重复与非法条目计入提示。导入只替换内存列表，点「保存到插件」才落盘。
+  0.1.8.0 的 CSV 按钮与解析代码已移除；CSV 导入导出仍保留在插件设置页。
 - emoji 保留完整 iTab 文字图标（渲染时取首字符）；图标缺失时按 emoji → iconSrc 图片 → 首字色块兜底。
 
 ### 14.5 iTab → 链接库映射
