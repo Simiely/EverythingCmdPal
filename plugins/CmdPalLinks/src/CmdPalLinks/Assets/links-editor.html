@@ -436,7 +436,7 @@ function countInTree(path){
 }
 function currentItems(){
   const base = state.selectedFolder === ROOT
-    ? state.items
+    ? state.items.filter(it => isUnder(it.folder, ROOT))
     : state.selectedFolder === ""
       ? state.items.filter(it => !it.folder)
       : state.items.filter(it => it.folder === state.selectedFolder);
@@ -542,10 +542,10 @@ function renderList(){
         : folderName(state.selectedFolder);
   $("folder-title").textContent = title;
   const total = state.selectedFolder === ROOT
-    ? state.items.length
+    ? countInTree(ROOT)
     : state.selectedFolder === ""
       ? unsortedCount()
-      : countInTree(state.selectedFolder);
+      : state.items.filter(it => it.folder === state.selectedFolder).length;
   $("folder-meta").textContent = state.query
     ? items.length + " 条匹配 / 共 " + total + " 条"
     : state.selectedFolder === ROOT
