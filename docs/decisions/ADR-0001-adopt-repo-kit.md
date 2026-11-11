@@ -8,7 +8,7 @@ status: active
 owner: "@simiely"
 topics: [governance]
 source_type: doc
-source: scripts/check_repo.py
+source: tools/repo-kit/check_repo.py
 last_reviewed: 2026-11-11
 related: []
 ---
@@ -38,7 +38,7 @@ host-notes / release），但没有任何机器可读的 frontmatter。文档靠
    `plugins/**` 与 `shared/**` 暂不进入扫描范围。
 2. **内容契约**：给 4 个机制文档补 frontmatter；`type` 用 Diátaxis，`kind` 用 standard/decision/index。
 3. **生成优先**：`AGENTS.md`、`llms.txt`、`docs/_generated/index.md`、`docs/_generated/backlinks.md`
-   全部由 `scripts/generate.py` 生成。
+   全部由 `tools/repo-kit/generate.py` 生成。
 4. **渐进执行**：用 `--write-baseline` 冻结 Phase 1 之外的遗留问题；CI 只对新增/修改文件报 ERROR。
 5. **目录链接**：根 README 里指向 `plugins/.../src` 的链接是合法导航，降为 WARN，不阻塞。
 
@@ -59,9 +59,9 @@ host-notes / release），但没有任何机器可读的 frontmatter。文档靠
 ## Verification
 
 ```bash
-python scripts/check_repo.py --root .
-python scripts/generate.py --root . --check
-python scripts/drift_probe.py --root .   # 在 kit 自带示例上跑；本仓库 Phase 1 尚无 examples
+python tools/repo-kit/check_repo.py --root .
+python tools/repo-kit/generate.py --root . --check
+# drift_probe 是 kit 自测，不随本仓库分发；在 kit 源仓库运行
 ```
 
 初始审计：24 个 `FM_MISSING`、2 个 `LINK_DIR`、1 个 `TRUTH_MISSING`、4 个 `GENERATED_MISSING`。

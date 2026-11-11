@@ -1,13 +1,13 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.2",
   "name": "EverythingCmdPal",
   "context_files": ["AGENTS.md"],
   "exempt_basenames": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"],
   "slugger": "github",
   "summary_policy": "warn",
   "types": ["tutorial", "how-to", "reference", "explanation"],
-  "kinds": ["standard", "decision", "index", "note", "glossary", "report"],
-  "statuses": ["draft", "active", "superseded", "archived"],
+  "kinds": ["standard", "decision", "index", "note", "glossary", "report", "pitfall"],
+  "statuses": ["draft", "active", "resolved", "superseded", "archived"],
   "tiers": ["normal", "critical"],
   "confidences": ["low", "medium", "high"],
   "topics": ["install", "troubleshooting", "release", "host-api", "architecture", "governance"],
@@ -52,7 +52,8 @@
     "AGENTS.md",
     "llms.txt",
     "docs/_generated/index.md",
-    "docs/_generated/backlinks.md"
+    "docs/_generated/backlinks.md",
+    "docs/_generated/pitfalls.md"
   ],
   "include": ["README.md", "AGENTS.md", "docs/**"],
   "ignore": [

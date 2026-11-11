@@ -8,7 +8,7 @@ status: active
 owner: "@simiely"
 topics: [governance]
 source_type: doc
-source: scripts/check_repo.py
+source: tools/repo-kit/check_repo.py
 last_reviewed: 2026-11-11
 related: []
 ---
@@ -52,9 +52,9 @@ v2.2 把这些能力做成 opt-in，默认不改变 v2.1 行为，因此可以�
 ## Verification
 
 ```bash
-python scripts/check_repo.py --root .
-python scripts/generate.py --root . --check
-python scripts/check_repo.py --root . --changed-files changed.txt
+python tools/repo-kit/check_repo.py --root .
+python tools/repo-kit/generate.py --root . --check
+python tools/repo-kit/check_repo.py --root . --changed-files changed.txt
 ```
 
 - Phase 1：`ERROR=0, WARN=2, pages=9`。

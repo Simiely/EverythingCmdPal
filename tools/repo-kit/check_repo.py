@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover - optional dependency
 LINK_SCHEMES = ("http://", "https://", "mailto:", "tel:", "javascript:", "data:")
 ADR_RE = re.compile(r"ADR-(\d{4})-[a-z0-9-]+\.md$")
 ID_RE = re.compile(r"^[a-z0-9]+(\.[a-z0-9-]+)+$")
+PITFALL_FIELDS = ("summary", "symptom", "cause", "detect", "avoid", "recover", "applies_to", "severity")
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +252,16 @@ def validate_schema(value, schema: dict, path: str = "$", out: list[str] | None 
     return out
 
 
+def schema_error_messages(value, schema_obj: dict) -> list[str]:
+    if Draft202012Validator is not None:
+        out = []
+        for err in sorted(Draft202012Validator(schema_obj).iter_errors(value), key=lambda e: list(e.path)):
+            where = ".".join(str(x) for x in err.path) or "$"
+            out.append(f"{where}: {err.message}")
+        return out
+    return validate_schema(value, schema_obj)
+
+
 # ---------------------------------------------------------------------------
 # Markdown helpers
 # ---------------------------------------------------------------------------
@@ -454,6 +465,16 @@ def main() -> int:
     context_files = tax.get("context_files") or []
     exempt_basenames = tax.get("exempt_basenames") or []
     summary_policy = tax.get("summary_policy", "off")
+    skills_cfg = tax.get("skills") or {}
+    link_only_files = tax.get("link_only_files") or []
+    skill_schema = None
+    if skills_cfg.get("schema"):
+        skill_schema_path = root / str(skills_cfg["schema"])
+        if skill_schema_path.exists():
+            skill_schema = json.loads(skill_schema_path.read_text(encoding="utf-8"))
+        else:
+            print(f"CONFIG_MISSING: {skill_schema_path}", file=sys.stderr)
+            return 2
 
     report = Report()
     ignored = tax.get("ignore", [])
@@ -473,14 +494,47 @@ def main() -> int:
             continue
         if matches_basename(rel, context_files) or matches_basename(rel, exempt_basenames):
             context_or_exempt.add(rel)
+        if any(fnmatch.fnmatch(rel, pat) for pat in link_only_files):
+            context_or_exempt.add(rel)
         text = p.read_text(encoding="utf-8", errors="replace")
         headings, links, code_tokens = parse_markdown(text)
         docs[rel] = Doc(p, rel, text, headings, anchor_set(headings, slugger_mode), links, code_tokens)
+
+    # 技能 profile：SKILL.md 用独立 schema，不套通用页面契约
+    skill_files: set[str] = set()
+    if skills_cfg.get("glob"):
+        for rel in docs:
+            if fnmatch.fnmatch(rel, str(skills_cfg["glob"])):
+                skill_files.add(rel)
+                context_or_exempt.add(rel)
+
+    seen_skill_names: dict[str, str] = {}
+    min_description = int(skills_cfg.get("min_description", 1))
+    for rel in sorted(skill_files):
+        fm, _body, fm_error = split_frontmatter(docs[rel].text)
+        if fm_error:
+            report.add("SKILL_FM", "ERROR", rel, fm_error)
+            continue
+        if skill_schema is not None:
+            for msg in schema_error_messages(fm, skill_schema):
+                report.add("SKILL_SCHEMA", "ERROR", rel, msg)
+        name = str(fm.get("name", "") or "")
+        if skills_cfg.get("name_matches_dir") and name and Path(rel).parent.name != name:
+            report.add("SKILL_NAME_DIR", "ERROR", rel, f"name={name!r} 与目录 {Path(rel).parent.name!r} 不一致")
+        if name:
+            if name in seen_skill_names:
+                report.add("SKILL_NAME_DUP", "ERROR", rel, f"技能 name 与 {seen_skill_names[name]} 重复：{name}")
+            else:
+                seen_skill_names[name] = rel
+        description = str(fm.get("description", "") or "")
+        if description and len(description) < min_description:
+            report.add("SKILL_DESC_SHORT", "ERROR", rel, f"description 只有 {len(description)} 字符，建议至少 {min_description}")
 
     pages: dict[str, Doc] = {}
     by_id: dict[str, str] = {}
     defines: dict[str, str] = {}
     relations: list[tuple[str, str, str, str]] = []
+    pitfalls: list[tuple[str, dict]] = []
 
     for rel, doc in docs.items():
         if is_generated(rel, generated) or rel in entry_files or rel in context_or_exempt:
@@ -504,6 +558,9 @@ def main() -> int:
         else:
             for msg in validate_schema(fm, schema):
                 report.add("SCHEMA", "ERROR", rel, msg)
+
+        if fm.get("kind") == "pitfall":
+            pitfalls.append((rel, fm))
 
         pid = str(fm.get("id", ""))
         if not ID_RE.match(pid):
@@ -598,7 +655,7 @@ def main() -> int:
 
         # 新鲜度（report / archived 不参与过期判定）
         reviewed = fm.get("last_reviewed")
-        if reviewed and fm.get("kind") != "report" and fm.get("status") != "archived":
+        if reviewed and fm.get("kind") != "report" and fm.get("status") not in ("archived", "resolved"):
             try:
                 reviewed_date = dt.date.fromisoformat(str(reviewed))
                 window = fm.get("review_days") or tax["review_days"].get(
@@ -613,7 +670,7 @@ def main() -> int:
 
         if (
             (summary_policy == "warn" or args.strict_summary)
-            and fm.get("kind") in ("standard", "index", "decision")
+            and fm.get("kind") in ("standard", "index", "decision", "pitfall")
             and not fm.get("summary")
         ):
             report.add("SUMMARY_MISSING", "WARN", rel, "standard/index/decision 建议写 summary")
@@ -667,12 +724,34 @@ def main() -> int:
             if target and str(target) not in by_id:
                 report.add("REL_TARGET", "ERROR", rel, f"{field} 指向不存在的 id：{target}")
 
+    # pitfall：字段、适用目标、自引用
+    for rel, fm in pitfalls:
+        pid = str(fm.get("id", ""))
+        for field in PITFALL_FIELDS:
+            value = fm.get(field)
+            if value is None or value == "" or value == []:
+                report.add("PITFALL_FIELD", "ERROR", rel, f"kind=pitfall 缺少 {field}")
+        severity = fm.get("severity")
+        if severity and severity not in ("low", "medium", "high", "critical"):
+            report.add("PITFALL_SEVERITY", "ERROR", rel, f"severity 不在 low/medium/high/critical：{severity!r}")
+        for target in fm.get("applies_to") or []:
+            target = str(target)
+            if target == pid:
+                report.add("PITFALL_SELF", "ERROR", rel, "applies_to 不能指向自己")
+            elif target not in by_id and target not in seen_skill_names:
+                report.add("PITFALL_TARGET", "ERROR", rel, f"applies_to 指向不存在的页面/技能：{target}")
+
     # 链接与锚点
     inbound: set[str] = set()
     # related 也是入链：只通过关系引用、没有正文链接的页面不应被判孤儿
     for _owner, target, _reltype, _source_rel in relations:
         if target in by_id:
             inbound.add(by_id[target])
+    # pitfall 的 applies_to 也是入链：坑被目标页“引用”，不应判孤儿
+    for _rel, fm in pitfalls:
+        for target in fm.get("applies_to") or []:
+            if str(target) in by_id:
+                inbound.add(by_id[str(target)])
     heading_cache: dict[str, set[str]] = {rel: d.anchors for rel, d in docs.items()}
 
     def headings_for(path: Path) -> set[str]:

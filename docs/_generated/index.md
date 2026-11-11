@@ -14,7 +14,7 @@ related: []
 
 # 生成索引
 
-> 生成文件，勿手改。运行 `python scripts/generate.py --root . --write` 重建。
+> 生成文件，勿手改。运行 `python tools/repo-kit/generate.py --root . --write` 重建。
 
 ## 按 type
 
@@ -38,8 +38,8 @@ related: []
 | 页面 | kind | status | owner | tier | source |
 |---|---|---|---|---|---|
 | [插件自包含单元模型](../concepts/plugin-model.md) | standard | active | @simiely | critical | `README.md` |
-| [ADR-0001 用 repo-kit v2 治理跨插件文档](../decisions/ADR-0001-adopt-repo-kit.md) | decision | active | @simiely | normal | `scripts/check_repo.py` |
-| [ADR-0002 升级到 repo-kit v2.2](../decisions/ADR-0002-v2-2-upgrade.md) | decision | active | @simiely | normal | `scripts/check_repo.py` |
+| [ADR-0001 用 repo-kit v2 治理跨插件文档](../decisions/ADR-0001-adopt-repo-kit.md) | decision | active | @simiely | normal | `tools/repo-kit/check_repo.py` |
+| [ADR-0002 升级到 repo-kit v2.2](../decisions/ADR-0002-v2-2-upgrade.md) | decision | active | @simiely | normal | `tools/repo-kit/check_repo.py` |
 | [Command Palette 宿主笔记（版本与 API 约束）](../host-notes.md) | standard | active | @simiely | critical | `plugins/EverythingCmdPal/docs/development.md` |
 
 ## 全部页面
