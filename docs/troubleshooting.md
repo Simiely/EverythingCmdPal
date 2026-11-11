@@ -1,3 +1,20 @@
+---
+id: docs.troubleshooting
+title: 排障（Command Palette 扩展通用）
+summary: 症状→先查什么、三层取证、错误码对照与 SparseApp 异常说明。
+type: how-to
+kind: standard
+status: active
+owner: "@simiely"
+tier: critical
+topics: [troubleshooting]
+defines: troubleshooting-guide
+source_type: doc
+source: docs/install.md
+last_reviewed: 2026-11-11
+related: []
+---
+
 # 排障（Command Palette 扩展通用）
 
 > 安装流程见 [install.md](install.md)；宿主 API 与版本差异见 [host-notes.md](host-notes.md)。

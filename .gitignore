@@ -29,3 +29,8 @@ ref/
 # IDE
 .vs/
 *.user
+
+# Python 校验工具缓存
+__pycache__/
+*.pyc
+.venv/

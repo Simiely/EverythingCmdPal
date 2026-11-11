@@ -13,6 +13,10 @@
 
 ## 按任务找入口
 
+**我要改文档 / 加新文档**
+→ 跨插件机制文档见 [docs/index.md](docs/index.md)；新页模板见 [docs/_template.md](docs/_template.md)；
+AI/人的仓库入口见 [AGENTS.md](AGENTS.md)。
+
 **我要装一个插件**
 1. 读 [docs/install.md](docs/install.md) 的 9 步流程与禁止项；
 2. 跑插件自己的薄封装：`plugins/<Plugin>/tools/install.ps1`（EverythingCmdPal 也可用 `tools\update.cmd`）；

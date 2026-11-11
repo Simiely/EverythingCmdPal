@@ -1,0 +1,13 @@
+{
+  "_comment": "Phase 1 只治理跨插件 docs/；plugins/** 的文档暂不进入扫描范围。manifest 版本变更要求 README/CHANGELOG 同 PR 更新。",
+  "code": [
+    {
+      "truth": "plugins/EverythingCmdPal/src/EverythingCmdPal/Package.appxmanifest",
+      "patterns": [],
+      "docs": [],
+      "co_change": true,
+      "co_change_docs": ["README.md", "plugins/EverythingCmdPal/CHANGELOG.md"]
+    }
+  ],
+  "knowledge": []
+}

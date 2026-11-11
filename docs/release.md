@@ -1,3 +1,20 @@
+---
+id: docs.release
+title: 发版规则
+summary: tag/资产命名、按插件独立递增版本、发版步骤与发布前检查表。
+type: how-to
+kind: standard
+status: active
+owner: "@simiely"
+tier: critical
+topics: [release]
+defines: release-guide
+source_type: code
+source: shared/build/package.ps1
+last_reviewed: 2026-11-11
+related: ["docs.install:depends-on"]
+---
+
 # 发版规则
 
 > 已有历史：tag `v1.3.4` + Release `EverythingCmdPal-1.3.4.zip`（单插件时代的命名，**保留不动**）。
