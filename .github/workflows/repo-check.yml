@@ -7,8 +7,12 @@ on:
       - 'schema/**'
       - 'tools/repo-kit/**'
       - 'tools/update-repo-kit.ps1'
+      - 'plugins/**'
+      - 'shared/**'
       - 'README.md'
       - 'AGENTS.md'
+      - 'DEVELOPMENT.md'
+      - 'CHANGELOG.md'
       - 'llms.txt'
   push:
     branches: [main]
@@ -24,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -31,6 +37,9 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Invariants
         run: python tools/repo-kit/check_repo.py --root . --json
+      - name: Co-change (manifest vs docs)
+        if: github.event_name == 'pull_request'
+        run: python tools/repo-kit/check_repo.py --root . --changed-since "origin/${{ github.base_ref }}"
       - name: Generated artifacts are up to date
         run: python tools/repo-kit/generate.py --root . --check
       - name: Kit lock
@@ -45,7 +54,7 @@ jobs:
           args: >-
             --offline --include-fragments --no-progress
             --exclude-path 'docs/_template.md'
-            'docs/**/*.md' 'AGENTS.md' 'llms.txt'
+            'docs/**/*.md' 'AGENTS.md' 'DEVELOPMENT.md' 'CHANGELOG.md' 'llms.txt'
           fail: true
 
   sarif:
@@ -77,7 +86,7 @@ jobs:
       - id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --no-progress --include-fragments 'docs/**/*.md' 'AGENTS.md' 'llms.txt'
+          args: --no-progress --include-fragments 'docs/**/*.md' 'AGENTS.md' 'DEVELOPMENT.md' 'CHANGELOG.md' 'llms.txt'
           fail: false
       - name: Open issue on external link failures
         if: steps.lychee.outputs.exit_code != 0

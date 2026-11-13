@@ -87,5 +87,5 @@ dotnet build plugins\CmdPalLinks\tests\StoreHarness\StoreHarness.csproj
 ## 发版
 
 按 [docs/release.md](../../docs/release.md)：tag `cmdpallinks-v<版本>`，资产 `CmdPalLinks-<版本>.msix` + `.sha256`，
-`Identity Version` 每次递增（当前 `0.1.16.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)；
+`Identity Version` 每次递增（当前 `0.1.17.0`）。变更记录见 [CHANGELOG.md](CHANGELOG.md)；
 场景走查报告见 [docs/walkthrough/2026-11-09-cmdpallinks.md](docs/walkthrough/2026-11-09-cmdpallinks.md)。

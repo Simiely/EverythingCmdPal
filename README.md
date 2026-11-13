@@ -9,7 +9,7 @@
 | 插件 | 一句话 | 当前版本 | 宿主最低版本 | 安装 | 排障 | 源码 | CHANGELOG |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | [EverythingCmdPal](plugins/EverythingCmdPal/README.md) | 用 Everything 秒搜全盘文件 | `1.3.4` | `0.100.2` | [install.ps1](plugins/EverythingCmdPal/tools/install.ps1) / [update.cmd](plugins/EverythingCmdPal/tools/update.cmd) | [troubleshooting](docs/troubleshooting.md) | [src](plugins/EverythingCmdPal/src) | [CHANGELOG](plugins/EverythingCmdPal/CHANGELOG.md) |
-| [CmdPalLinks](plugins/CmdPalLinks/README.md) | 本地链接 / 文件 / 文件夹收藏与检索 | `0.1.2.0` | `0.100.2` | [install.ps1](plugins/CmdPalLinks/tools/install.ps1) | [install-notes](plugins/CmdPalLinks/docs/install-notes.md) | [src](plugins/CmdPalLinks/src) | [CHANGELOG](plugins/CmdPalLinks/CHANGELOG.md) |
+| [CmdPalLinks](plugins/CmdPalLinks/README.md) | 本地链接 / 文件 / 文件夹收藏与检索 | `0.1.17.0` | `0.100.2` | [install.ps1](plugins/CmdPalLinks/tools/install.ps1) | [install-notes](plugins/CmdPalLinks/docs/install-notes.md) | [src](plugins/CmdPalLinks/src) | [CHANGELOG](plugins/CmdPalLinks/CHANGELOG.md) |
 
 ## 按任务找入口
 
