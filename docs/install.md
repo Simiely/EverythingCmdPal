@@ -1,3 +1,20 @@
+---
+id: docs.install
+title: 安装与更新（零残留流程，通用）
+summary: 9 步安装流程、禁止项，以及包/持久缓存/UIA 渲染三层残留核对。
+type: how-to
+kind: standard
+status: active
+owner: "@simiely"
+tier: critical
+topics: [install]
+defines: install-guide
+source_type: code
+source: shared/build/install.ps1
+last_reviewed: 2026-11-11
+related: ["docs.troubleshooting:see-also"]
+---
+
 # 安装与更新（零残留流程，通用）
 
 > 基线：2026-11-06 · 宿主 `PowerToys 0.100.2` / `CmdPal UI 0.11.11762.0` / `SparseApp 0.100.2.0`

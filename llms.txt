@@ -1,0 +1,30 @@
+# EverythingCmdPal
+
+> 文档索引与机器可读入口：内容契约、类型化关系、证据与新鲜度。
+> 生成文件，勿手改。
+
+## Core
+
+- [README](./README.md)
+- [文档索引](./docs/index.md)
+- [决策索引](./docs/decisions/index.md)
+
+## By type
+
+### how-to
+
+- [安装与更新（零残留流程，通用）](./docs/install.md) — 9 步安装流程、禁止项，以及包/持久缓存/UIA 渲染三层残留核对。
+- [发版规则](./docs/release.md) — tag/资产命名、按插件独立递增版本、发版步骤与发布前检查表。
+- [排障（Command Palette 扩展通用）](./docs/troubleshooting.md) — 症状→先查什么、三层取证、错误码对照与 SparseApp 异常说明。
+
+### reference
+
+- [决策索引](./docs/decisions/index.md) — ADR 的唯一索引；编号唯一，不要求连续。
+- [跨插件文档索引](./docs/index.md) — install / troubleshooting / host-notes / release 的导航枢纽。
+
+### explanation
+
+- [插件自包含单元模型](./docs/concepts/plugin-model.md) — 一个插件一个目录；Identity/CLSID/LocalState/进程隔离；跨插件只共享机制与脚本。
+- [ADR-0001 用 repo-kit v2 治理跨插件文档](./docs/decisions/ADR-0001-adopt-repo-kit.md) — 先治理根 docs/ 与跨插件机制文档，插件内文档用 baseline 渐进纳入。
+- [ADR-0002 升级到 repo-kit v2.2](./docs/decisions/ADR-0002-v2-2-upgrade.md) — 启用 context/health 豁免与同 PR co-change；Phase 2 baseline 从 22 降到 16/15。
+- [Command Palette 宿主笔记（版本与 API 约束）](./docs/host-notes.md) — 宿主版本基线、0.11/0.13 可观测差异与扩展 API 边界。

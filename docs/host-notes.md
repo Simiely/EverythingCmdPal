@@ -1,3 +1,20 @@
+---
+id: docs.host-notes
+title: Command Palette 宿主笔记（版本与 API 约束）
+summary: 宿主版本基线、0.11/0.13 可观测差异与扩展 API 边界。
+type: explanation
+kind: standard
+status: active
+owner: "@simiely"
+tier: critical
+topics: [host-api]
+defines: host-notes
+source_type: doc
+source: plugins/EverythingCmdPal/docs/development.md
+last_reviewed: 2026-11-11
+related: []
+---
+
 # Command Palette 宿主笔记（版本与 API 约束）
 
 > 记录实测到的宿主行为差异与扩展 API 边界。改动宿主版本前先读本文。
