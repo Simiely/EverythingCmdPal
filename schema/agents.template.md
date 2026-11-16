@@ -1,5 +1,5 @@
 # AGENTS.md — EverythingCmdPal 仓库入口
-> 📌 **文档基线**：2026-11-13（commit `c50f8b8`）完成四件套补齐
+> 📌 **文档基线**：2026-11-16（commit `b2cf606`）升级 repo-kit 2.5.3 / 规范 2.1.2；四件套补齐扫描
 > **更新文档/代码后，请更新此行**（日期 + 新 commit hash），并在 CHANGELOG 追加版本
 
 > 生成文件，勿手改。改规则请改 `schema/agents.template.md` 或 `tools/repo-kit/generate.py`，再运行 `python tools/repo-kit/generate.py --root . --write`。
