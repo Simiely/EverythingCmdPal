@@ -7,6 +7,17 @@
 | EverythingCmdPal | `1.3.4` | [CHANGELOG](plugins/EverythingCmdPal/CHANGELOG.md) |
 | CmdPalLinks | `0.1.17.0` | [CHANGELOG](plugins/CmdPalLinks/CHANGELOG.md) |
 
+## 2026-11-16 · 升级 repo-kit 2.5.3 / 规范 2.1.2
+
+- 重装 kit：`check_repo.py` / `generate.py` 换代，`schema/kit.lock.json` 写入 `v2.5.3 / spec 2.1.2`
+- `schema/taxonomy.json` 首次把 `DEVELOPMENT.md` 与 `CHANGELOG.md` 纳入扫描
+  （此前四件套里这两份不在 `include`，等于从未被检查；插件目录仍按 Phase 1 惯例不扫）
+- `check_repo.py` 新增 `--prune-baseline`，本仓库无 baseline，暂不使用
+- CI 无需改动：本仓库此前已手工补过 `fetch-depth: 0` 与 PR 的 `--changed-since`，
+  `requirements.txt` 本身就是文档依赖
+- 验收：`REPO CHECK: PASS`（ERROR=0、WARN 2 → 0、pages=9）、`GENERATE CHECK: PASS`、
+  `KIT LOCK: PASS (v2.5.3, spec=2.1.2)`
+
 ## 2026-11-13 · 文档治理收尾
 
 - 根目录补齐四件套：新增本文件与 [DEVELOPMENT.md](DEVELOPMENT.md)（概览 / 架构 / 关键问题门面）
