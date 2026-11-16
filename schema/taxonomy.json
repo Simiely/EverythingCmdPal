@@ -1,56 +1,16 @@
 {
   "version": "2.5.3",
   "name": "EverythingCmdPal",
-  "context_files": [
-    "AGENTS.md"
-  ],
-  "exempt_basenames": [
-    "README.md",
-    "CHANGELOG.md",
-    "CONTRIBUTING.md",
-    "SECURITY.md"
-  ],
+  "context_files": ["AGENTS.md"],
+  "exempt_basenames": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"],
   "slugger": "github",
   "summary_policy": "warn",
-  "types": [
-    "tutorial",
-    "how-to",
-    "reference",
-    "explanation"
-  ],
-  "kinds": [
-    "standard",
-    "decision",
-    "index",
-    "note",
-    "glossary",
-    "report",
-    "pitfall"
-  ],
-  "statuses": [
-    "draft",
-    "active",
-    "resolved",
-    "superseded",
-    "archived"
-  ],
-  "tiers": [
-    "normal",
-    "critical"
-  ],
-  "confidences": [
-    "low",
-    "medium",
-    "high"
-  ],
-  "topics": [
-    "install",
-    "troubleshooting",
-    "release",
-    "host-api",
-    "architecture",
-    "governance"
-  ],
+  "types": ["tutorial", "how-to", "reference", "explanation"],
+  "kinds": ["standard", "decision", "index", "note", "glossary", "report", "pitfall"],
+  "statuses": ["draft", "active", "resolved", "superseded", "archived"],
+  "tiers": ["normal", "critical"],
+  "confidences": ["low", "medium", "high"],
+  "topics": ["install", "troubleshooting", "release", "host-api", "architecture", "governance"],
   "relations": {
     "depends-on": {
       "direction": "directed",
@@ -87,10 +47,7 @@
     "normal": 365,
     "critical": 90
   },
-  "entry_files": [
-    "README.md",
-    "DEVELOPMENT.md"
-  ],
+  "entry_files": ["README.md", "DEVELOPMENT.md"],
   "generated_files": [
     "AGENTS.md",
     "llms.txt",
@@ -98,13 +55,7 @@
     "docs/_generated/backlinks.md",
     "docs/_generated/pitfalls.md"
   ],
-  "include": [
-    "README.md",
-    "AGENTS.md",
-    "docs/**",
-    "DEVELOPMENT.md",
-    "CHANGELOG.md"
-  ],
+  "include": ["README.md", "AGENTS.md", "DEVELOPMENT.md", "CHANGELOG.md", "docs/**"],
   "ignore": [
     "plugins/**",
     "shared/**",
