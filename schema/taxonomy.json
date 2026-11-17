@@ -1,10 +1,6 @@
 {
-  "version": "2.5.3",
+  "version": "2.7.0",
   "name": "EverythingCmdPal",
-  "context_files": ["AGENTS.md"],
-  "exempt_basenames": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"],
-  "slugger": "github",
-  "summary_policy": "warn",
   "types": ["tutorial", "how-to", "reference", "explanation"],
   "kinds": ["standard", "decision", "index", "note", "glossary", "report", "pitfall"],
   "statuses": ["draft", "active", "resolved", "superseded", "archived"],
@@ -47,7 +43,6 @@
     "normal": 365,
     "critical": 90
   },
-  "entry_files": ["README.md", "DEVELOPMENT.md"],
   "generated_files": [
     "AGENTS.md",
     "llms.txt",
@@ -56,6 +51,17 @@
     "docs/_generated/pitfalls.md"
   ],
   "include": ["README.md", "AGENTS.md", "DEVELOPMENT.md", "CHANGELOG.md", "docs/**"],
+  "frontmatter_exempt": {
+    "names": [
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "DEVELOPMENT.md",
+      "README.md",
+      "SECURITY.md"
+    ],
+    "paths": []
+  },
   "ignore": [
     "plugins/**",
     "shared/**",
