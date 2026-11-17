@@ -73,9 +73,9 @@ URL 归一化规则：scheme/host 小写、去默认端口、去 fragment、去 
 | Edge 新增 | 网站导航 | http://max77.cn/maxa.html |
 | Edge 新增 | 配置IPv6隧道，IP被墙的另一种解决方案 - 明镜录 | https://www.mingjinglu.com/coding/504.html |
 | 原有 261 | C4D模型 | https://www.cgufo.com/cgziyuan/c4d/c4dmodel |
-| 原有 261 | Simiely/hub-world | https://github.com/Simiely/hub-world |
+| 原有 261 | Simiely/hub-world（2026-11 已归档） | https://github.com/Simiely/hub-world |
 | 原有 261 | iPA应用商店_iOS免签安装, | https://png.0210.net/index.php |
-| 原有 261 | 世界的风吹向你 / 探索 | https://simiely.github.io/hub-world/ |
+| 原有 261 | 世界的风吹向你 / 探索（站点已下线） | https://simiely.github.io/hub-world/ |
 | 原有 261 | 什么值得读 | https://shenmezhidedu.com/?from=itab |
 | 原有 261 | 零点 FRP | https://www.frp0.top/client/dashboard |
 
