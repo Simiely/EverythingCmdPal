@@ -26,7 +26,7 @@ python tools/repo-kit/generate.py --root . --check
 ## 当前规模
 - 页面：9（critical=5）
 - 按 type：explanation=4, how-to=3, reference=2
-- 词表版本：2.5.3
+- 词表版本：2.7.0
 
 ## 验收
 `REPO CHECK: PASS`（ERROR=0）。检查器验证不了「这句话是不是真的」；改安装脚本 / 宿主版本 /
